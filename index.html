@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="es" data-bs-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Laboratorio VR de Ensamblaje 3D</title>
+  <meta name="description" content="Laboratorio virtual de manipulación y ensamblaje 3D para Meta Quest 3 con seguimiento de manos. Three.js + WebXR.">
+  <meta name="author" content="Melissa Manzano">
+  <meta name="theme-color" content="#0b1220">
+  <meta property="og:title" content="Laboratorio VR de Ensamblaje 3D">
+  <meta property="og:description" content="Selecciona, arrastra y ensambla cinco piezas 3D con tus manos en Meta Quest 3.">
+  <meta property="og:type" content="website">
+
+  <!-- Rutas RELATIVAS (sin "/" inicial) para que funcionen en GitHub Pages bajo /nombre-repo/ -->
+  <link rel="icon" type="image/svg+xml" href="assets/icons/favicon.svg">
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+  <link rel="stylesheet"
+        href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+        integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
+        crossorigin="anonymous">
+  <link rel="stylesheet" href="css/styles.css">
+
+  <!--
+    IMPORT MAP: traduce los "nombres" de los imports a URLs reales.
+    - "three"          → núcleo de Three.js
+    - "three/addons/"  → prefijo de los complementos (VR, manos, controles, cargadores)
+    Ambos usan el MISMO proveedor (jsDelivr) y la MISMA versión (0.170.0), así los
+    addons comparten una sola copia del núcleo. Debe ir ANTES de cualquier módulo.
+  -->
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    }
+  }
+  </script>
+
+  <script src="js/bootGuard.js"></script>
+  <script type="module" src="js/main.js"
+          onerror="window.labBootGuard && window.labBootGuard.fail('No se pudieron cargar los módulos de la aplicación (revisa rutas, CDN o la pestaña Network).')"></script>
+</head>
+<body>
+  <a class="visually-hidden-focusable skip-link" href="#contenido">Saltar al contenido</a>
+
+  <header class="hero">
+    <nav class="navbar border-bottom border-secondary-subtle" aria-label="Principal">
+      <div class="container">
+        <span class="navbar-brand d-flex align-items-center gap-2">
+          <img src="assets/icons/favicon.svg" alt="" width="32" height="32">
+          <span class="fw-semibold">Lab<span class="text-info">VR</span> Ensamblaje</span>
+        </span>
+        <span class="badge rounded-pill text-bg-dark border border-info-subtle d-none d-sm-inline">3.1 Introducción a las aplicaciones VR</span>
+      </div>
+    </nav>
+
+    <div class="container py-5">
+      <div class="row g-4 align-items-center">
+        <div class="col-lg-7">
+          <p class="text-info fw-semibold text-uppercase small mb-2">Meta Quest 3 · Three.js · WebXR</p>
+          <h1 class="display-5 fw-bold mb-3">Laboratorio virtual de manipulación y ensamblaje 3D</h1>
+          <p class="lead text-body-secondary mb-4">
+            Entra a un laboratorio inmersivo y usa <strong>solo tus manos</strong> para seleccionar,
+            arrastrar y ensamblar cinco piezas geométricas en sus destinos. El cronómetro corre
+            desde tu primer agarre.
+          </p>
+          <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
+            <button id="btn-enter-vr" type="button" class="btn btn-info btn-lg px-4 fw-semibold" disabled aria-busy="true">
+              <span id="btn-enter-spinner" class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+              <span id="btn-enter-label">Cargando…</span>
+            </button>
+            <a class="btn btn-outline-light btn-lg" href="#instrucciones">Cómo se juega</a>
+          </div>
+          <p id="xr-status" class="small text-body-secondary mb-0" role="status" aria-live="polite">
+            Cargando Three.js y comprobando compatibilidad…
+          </p>
+          <div id="error-box" class="alert alert-danger mt-3 d-none" role="alert">
+            <strong>Problema detectado:</strong> <span id="error-text"></span>
+          </div>
+        </div>
+
+        <div class="col-lg-5">
+          <section class="card glass-card" aria-labelledby="compat-title">
+            <div class="card-body">
+              <h2 id="compat-title" class="h5 card-title mb-3">Compatibilidad</h2>
+              <ul class="check-list list-unstyled mb-0">
+                <li id="chk-three" class="check-item" data-state="pending">
+                  <span class="check-icon" aria-hidden="true"></span>
+                  <span class="check-label">Three.js (CDN)</span>
+                  <span class="check-detail">Cargando…</span>
+                </li>
+                <li id="chk-secure" class="check-item" data-state="pending">
+                  <span class="check-icon" aria-hidden="true"></span>
+                  <span class="check-label">Contexto seguro</span>
+                  <span class="check-detail">Comprobando…</span>
+                </li>
+                <li id="chk-webxr" class="check-item" data-state="pending">
+                  <span class="check-icon" aria-hidden="true"></span>
+                  <span class="check-label">WebXR</span>
+                  <span class="check-detail">Comprobando…</span>
+                </li>
+                <li id="chk-vr" class="check-item" data-state="pending">
+                  <span class="check-icon" aria-hidden="true"></span>
+                  <span class="check-label">Sesión immersive-vr</span>
+                  <span class="check-detail">Comprobando…</span>
+                </li>
+                <li id="chk-hands" class="check-item" data-state="pending">
+                  <span class="check-icon" aria-hidden="true"></span>
+                  <span class="check-label">Seguimiento de manos</span>
+                  <span class="check-detail">Se comprueba al entrar</span>
+                </li>
+              </ul>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main id="contenido" class="container py-5">
+    <section id="instrucciones" class="mb-5" aria-labelledby="instr-title">
+      <h2 id="instr-title" class="h3 fw-bold mb-4">Cómo se usa con las manos</h2>
+      <ol class="row g-3 list-unstyled steps">
+        <li class="col-sm-6 col-lg-3">
+          <div class="card h-100 step-card"><div class="card-body">
+            <span class="step-number" aria-hidden="true">1</span>
+            <h3 class="h6 fw-bold">Entra a VR</h3>
+            <p class="small text-body-secondary mb-0">Deja los mandos, pulsa <em>Entrar a VR</em> y muestra tus manos frente al visor.</p>
+          </div></div>
+        </li>
+        <li class="col-sm-6 col-lg-3">
+          <div class="card h-100 step-card"><div class="card-body">
+            <span class="step-number" aria-hidden="true">2</span>
+            <h3 class="h6 fw-bold">Apunta</h3>
+            <p class="small text-body-secondary mb-0">Cada mano proyecta un rayo. La pieza apuntada se ilumina y crece un poco.</p>
+          </div></div>
+        </li>
+        <li class="col-sm-6 col-lg-3">
+          <div class="card h-100 step-card"><div class="card-body">
+            <span class="step-number" aria-hidden="true">3</span>
+            <h3 class="h6 fw-bold">Pellizca y arrastra</h3>
+            <p class="small text-body-secondary mb-0">Junta índice y pulgar para tomarla. Mantén la pinza y mueve la mano.</p>
+          </div></div>
+        </li>
+        <li class="col-sm-6 col-lg-3">
+          <div class="card h-100 step-card"><div class="card-body">
+            <span class="step-number" aria-hidden="true">4</span>
+            <h3 class="h6 fw-bold">Suelta en su destino</h3>
+            <p class="small text-body-secondary mb-0">Abre los dedos sobre la silueta con la misma forma y letra. Verde = correcto, rojo = inténtalo otra vez.</p>
+          </div></div>
+        </li>
+      </ol>
+      <div class="alert alert-warning small mt-3 mb-0" role="note">
+        <strong>Gesto del sistema:</strong> si pellizcas con la <strong>palma hacia ti</strong>, se abre el menú de Meta.
+        Para tomar piezas, pellizca con la palma hacia la mesa. Para salir usa el botón 3D <em>Salir de VR</em>
+        o el menú del visor.
+      </div>
+    </section>
+
+    <div class="row g-4 mb-5">
+      <section class="col-lg-7" aria-labelledby="obj-title">
+        <h2 id="obj-title" class="h3 fw-bold mb-3">Cinco objetivos</h2>
+        <ol id="objectives-list" class="objective-list list-unstyled">
+          <li>Cargando objetivos…</li>
+        </ol>
+        <p class="small text-body-secondary">
+          Una pieza es correcta si se suelta en <strong>su</strong> destino a 8 cm o menos de su centro.
+          Al acertar se ajusta sola (snap), se pone verde, suena una confirmación y queda bloqueada.
+        </p>
+      </section>
+
+      <section class="col-lg-5" aria-labelledby="sum-title">
+        <h2 id="sum-title" class="h3 fw-bold mb-3">Tu progreso</h2>
+        <div class="card glass-card">
+          <div class="card-body">
+            <dl class="row mb-0 summary">
+              <dt class="col-5">Ensambladas</dt><dd id="summary-progress" class="col-7">0/5</dd>
+              <dt class="col-5">Estado</dt><dd id="summary-phase" class="col-7">Pendiente</dd>
+              <dt class="col-5">Tiempo</dt><dd id="summary-time" class="col-7">00:00</dd>
+            </dl>
+          </div>
+        </div>
+
+        <h2 class="h5 fw-bold mt-4 mb-2">Requisitos</h2>
+        <ul class="small text-body-secondary mb-0">
+          <li>Meta Quest 3 con Meta Quest Browser actualizado.</li>
+          <li>Seguimiento de manos activado: <em>Configuración → Movimiento → Seguimiento de manos</em>.</li>
+          <li>Abrir la página por <strong>HTTPS</strong> (GitHub Pages).</li>
+          <li>Espacio libre dentro del límite de seguridad; puedes estar de pie o sentado.</li>
+        </ul>
+      </section>
+    </div>
+
+    <section class="mb-5" aria-labelledby="preview-title">
+      <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
+        <h2 id="preview-title" class="h3 fw-bold mb-0">Vista previa de depuración</h2>
+        <span class="badge text-bg-secondary">Solo para escritorio · no sustituye la VR</span>
+      </div>
+      <div id="preview-container" class="preview-container rounded-4 border border-secondary-subtle"></div>
+      <p class="small text-body-secondary mt-2 mb-0">
+        <kbd>Clic izquierdo</kbd> toma o suelta piezas y pulsa botones ·
+        <kbd>Clic derecho + arrastrar</kbd> gira la cámara · <kbd>Rueda</kbd> acerca o aleja.
+      </p>
+    </section>
+
+    <section aria-labelledby="help-title">
+      <h2 id="help-title" class="h3 fw-bold mb-3">Solución de problemas</h2>
+      <div class="accordion" id="faq">
+        <div class="accordion-item">
+          <h3 class="accordion-header">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq1" aria-expanded="false" aria-controls="faq1">
+              El botón dice "VR no disponible aquí"
+            </button>
+          </h3>
+          <div id="faq1" class="accordion-collapse collapse" data-bs-parent="#faq">
+            <div class="accordion-body small">
+              En una computadora sin visor es normal. Abre la URL <strong>HTTPS</strong> en Meta Quest Browser.
+              Ojo: <code>localhost</code> de tu PC no es el <code>localhost</code> del visor.
+            </div>
+          </div>
+        </div>
+        <div class="accordion-item">
+          <h3 class="accordion-header">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq2" aria-expanded="false" aria-controls="faq2">
+              Dentro de VR no veo mis manos
+            </button>
+          </h3>
+          <div id="faq2" class="accordion-collapse collapse" data-bs-parent="#faq">
+            <div class="accordion-body small">
+              Suelta los mandos y ponlos sobre una superficie. Comprueba que el seguimiento de manos esté activado
+              y que haya buena iluminación. El panel 3D indica "Izquierda ✓ / Derecha ✓" cuando las detecta.
+            </div>
+          </div>
+        </div>
+        <div class="accordion-item">
+          <h3 class="accordion-header">
+            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#faq3" aria-expanded="false" aria-controls="faq3">
+              La página se queda en "Cargando…"
+            </button>
+          </h3>
+          <div id="faq3" class="accordion-collapse collapse" data-bs-parent="#faq">
+            <div class="accordion-body small">
+              Abre la consola (F12) y la pestaña <em>Network</em>: busca errores 404 o CORS. No abras el archivo con doble clic
+              (<code>file://</code>); usa Live Server o la URL publicada.
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="border-top border-secondary-subtle py-4">
+    <div class="container d-flex flex-column flex-md-row justify-content-between gap-2 small text-body-secondary">
+      <p class="mb-0">
+        Desarrollado por <strong class="text-body">Melissa Manzano</strong> · Desarrollo de Ambientes Virtuales · 2026
+      </p>
+      <p class="mb-0">
+        Hecho con <a href="https://threejs.org/" class="link-info">Three.js</a> r170 (MIT) y
+        <a href="https://getbootstrap.com/" class="link-info">Bootstrap</a> 5.3.3 (MIT) ·
+        Modelos de mano: WebXR Input Profiles (MIT)
+      </p>
+    </div>
+  </footer>
+
+  <noscript>
+    <div class="alert alert-danger m-3">Esta aplicación necesita JavaScript habilitado.</div>
+  </noscript>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"
+          integrity="sha384-YvpcrYf0tY3lHB60NNkmXc5s9fDVZLESaAA55NDzOxhy9GkcIdslK1eN7N6jIeHz"
+          crossorigin="anonymous" defer></script>
+</body>
+</html>

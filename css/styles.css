@@ -1,0 +1,164 @@
+/* styles.css — Estilos propios de la portada (complementan a Bootstrap 5). */
+
+:root {
+  --lab-bg: #0b1220;
+  --lab-surface: rgba(21, 35, 61, 0.72);
+  --lab-border: rgba(56, 189, 248, 0.25);
+  --lab-accent: #38bdf8;
+  --lab-ok: #22c55e;
+  --lab-warn: #f59e0b;
+  --lab-fail: #ef4444;
+  --lab-muted: #64748b;
+}
+
+body {
+  background-color: var(--lab-bg);
+  color: #e2e8f0;
+}
+
+.skip-link {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 1000;
+  padding: 0.5rem 1rem;
+  background: var(--lab-accent);
+  color: #0b1220;
+  border-radius: 0.5rem;
+}
+
+/* Foco visible para navegación con teclado */
+:focus-visible {
+  outline: 3px solid var(--lab-accent);
+  outline-offset: 3px;
+}
+
+/* "VR no disponible aquí" / "En VR…": el botón deshabilitado no debe parecer una acción.
+   Mientras carga o inicia (aria-busy) conserva el color para indicar progreso. */
+#btn-enter-vr:disabled:not([aria-busy="true"]) {
+  filter: grayscale(1);
+  opacity: 0.55;
+}
+
+.hero {
+  background:
+    radial-gradient(1200px 500px at 85% -10%, rgba(56, 189, 248, 0.18), transparent 60%),
+    radial-gradient(800px 400px at -10% 110%, rgba(142, 36, 170, 0.18), transparent 60%),
+    linear-gradient(180deg, #0f1a30 0%, var(--lab-bg) 100%);
+}
+
+.glass-card {
+  background: var(--lab-surface);
+  border: 1px solid var(--lab-border);
+  backdrop-filter: blur(6px);
+}
+
+/* Lista de compatibilidad */
+.check-item {
+  display: grid;
+  grid-template-columns: 1.5rem 1fr;
+  grid-template-rows: auto auto;
+  column-gap: 0.75rem;
+  padding: 0.55rem 0;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+}
+.check-item:last-child { border-bottom: 0; }
+.check-icon {
+  grid-row: span 2;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: #0b1220;
+  background: var(--lab-muted);
+}
+.check-label { font-weight: 600; }
+.check-detail { font-size: 0.85rem; color: #94a3b8; }
+
+.check-item[data-state="pending"] .check-icon::before { content: "…"; color: #e2e8f0; }
+.check-item[data-state="ok"] .check-icon { background: var(--lab-ok); }
+.check-item[data-state="ok"] .check-icon::before { content: "✓"; }
+.check-item[data-state="warn"] .check-icon { background: var(--lab-warn); }
+.check-item[data-state="warn"] .check-icon::before { content: "!"; }
+.check-item[data-state="fail"] .check-icon { background: var(--lab-fail); color: #fff; }
+.check-item[data-state="fail"] .check-icon::before { content: "✕"; }
+
+/* Pasos */
+.step-card {
+  background: var(--lab-surface);
+  border: 1px solid var(--lab-border);
+}
+.step-number {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  margin-bottom: 0.75rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--lab-accent);
+  color: #0b1220;
+  font-weight: 800;
+}
+
+/* Objetivos */
+.objective-list { display: grid; gap: 0.6rem; }
+.objective-item {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.65rem 0.85rem;
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  border-radius: 0.75rem;
+  background: rgba(15, 23, 42, 0.6);
+}
+.objective-swatch {
+  flex: 0 0 auto;
+  width: 2.2rem;
+  height: 2.2rem;
+  border-radius: 0.6rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  color: #0b1220;
+  background: var(--swatch, var(--lab-muted));
+  box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.35);
+}
+
+.summary dd { font-weight: 700; color: var(--lab-accent); margin-bottom: 0.4rem; }
+
+/* Vista previa 3D */
+.preview-container {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  min-height: 260px;
+  overflow: hidden;
+  background: #0b1220;
+}
+.preview-canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  touch-action: none;
+}
+
+body.xr-presenting .preview-container::after {
+  content: "Sesión VR en curso — mira dentro del visor";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(11, 18, 32, 0.85);
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { scroll-behavior: auto !important; transition: none !important; }
+}
