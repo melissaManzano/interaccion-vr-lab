@@ -1,15 +1,15 @@
 /**
  * selectables.js — Lista CERRADA de objetos seleccionables, con categorías y prioridad.
  *
- * El rayo solo prueba los objetos registrados aquí. El piso, las paredes, la mesa,
- * las siluetas y el panel nunca se seleccionan por error.
+ * El rayo solo prueba los objetos registrados aquí. El piso, las paredes, las mesas,
+ * los recipientes y el marcador nunca se seleccionan por error.
  *
- * Prioridad: los BOTONES se evalúan antes que las PIEZAS. Si un rayo toca un botón,
- * ninguna pieza se activa con esa misma pinza.
+ * Prioridad: los BOTONES se evalúan antes que las FIGURAS. Si un rayo toca un botón,
+ * ninguna figura se activa con esa misma pinza.
  */
-export const CATEGORY = Object.freeze({ BUTTON: 'button', PIECE: 'piece' });
+export const CATEGORY = Object.freeze({ BUTTON: 'button', OBJECT: 'object' });
 
-const PRIORITY_ORDER = Object.freeze([CATEGORY.BUTTON, CATEGORY.PIECE]);
+const PRIORITY_ORDER = Object.freeze([CATEGORY.BUTTON, CATEGORY.OBJECT]);
 
 export function createSelectableRegistry() {
   const byCategory = new Map(PRIORITY_ORDER.map((c) => [c, []]));
@@ -18,7 +18,7 @@ export function createSelectableRegistry() {
   return {
     /**
      * @param {THREE.Object3D} object  malla que recibe el raycast
-     * @param {string} category        CATEGORY.BUTTON | CATEGORY.PIECE
+     * @param {string} category        CATEGORY.BUTTON | CATEGORY.OBJECT
      * @param {string} id
      * @param {() => boolean} isEnabled  si devuelve false, el objeto se ignora
      */
@@ -54,6 +54,21 @@ export function createSelectableRegistry() {
         }
       }
       return null;
+    },
+
+    /**
+     * Objeto habilitado de la categoría cuyo centro está más cerca de `point`,
+     * dentro de `radius`. Se usa para el agarre cercano con la mano.
+     */
+    nearest(point, radius, category) {
+      let best = null;
+      let bestDistance = radius;
+      for (const entry of byCategory.get(category) ?? []) {
+        if (!entry.object.visible || !entry.isEnabled()) continue;
+        const d = entry.object.position.distanceTo(point);
+        if (d <= bestDistance) { best = entry; bestDistance = d; }
+      }
+      return best ? { id: best.id, object: best.object, distance: bestDistance } : null;
     },
 
     clear() {

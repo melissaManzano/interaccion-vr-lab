@@ -23,12 +23,14 @@
     if (spinner) spinner.classList.add('d-none');
     var status = document.getElementById('xr-status');
     if (status) status.textContent = 'La aplicación no pudo iniciarse. Revisa la consola (F12).';
-    var three = document.getElementById('chk-three');
-    if (three && three.dataset.state !== 'ok') {
-      three.dataset.state = 'fail';
-      var detail = three.querySelector('.check-detail');
-      if (detail) detail.textContent = 'No se pudo cargar';
-    }
+    ['chk-three', 'chk-physics'].forEach(function (id) {
+      var item = document.getElementById(id);
+      if (item && item.dataset.state !== 'ok') {
+        item.dataset.state = 'fail';
+        var detail = item.querySelector('.check-detail');
+        if (detail) detail.textContent = 'No se pudo cargar';
+      }
+    });
   }
 
   window.labBootGuard = { fail: fail };
@@ -43,7 +45,7 @@
     }
     window.setTimeout(function () {
       if (!window.__labBooted) {
-        fail('La aplicación tardó demasiado en cargar. Revisa tu conexión y la pestaña Network (posible fallo del CDN de Three.js).');
+        fail('La aplicación tardó demasiado en cargar. Revisa tu conexión y la pestaña Network (posible fallo del CDN de Three.js o cannon-es).');
       }
     }, BOOT_TIMEOUT_MS);
   });

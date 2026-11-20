@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Laboratorio VR de Ensamblaje 3D</title>
-  <meta name="description" content="Laboratorio virtual de manipulación y ensamblaje 3D para Meta Quest 3 con seguimiento de manos. Three.js + WebXR.">
+  <title>Laboratorio VR de Clasificación</title>
+  <meta name="description" content="Laboratorio inmersivo de clasificación geométrica con gravedad y colisiones para Meta Quest 3, con seguimiento de manos. Three.js + WebXR + cannon-es.">
   <meta name="author" content="Melissa Manzano">
   <meta name="theme-color" content="#0b1220">
-  <meta property="og:title" content="Laboratorio VR de Ensamblaje 3D">
-  <meta property="og:description" content="Selecciona, arrastra y ensambla cinco piezas 3D con tus manos en Meta Quest 3.">
+  <meta property="og:title" content="Laboratorio VR de Clasificación Geométrica">
+  <meta property="og:description" content="Toma con tus manos veinte figuras físicas y clasifícalas en cuatro recipientes en Meta Quest 3.">
   <meta property="og:type" content="website">
 
   <!-- Rutas RELATIVAS (sin "/" inicial) para que funcionen en GitHub Pages bajo /nombre-repo/ -->
@@ -22,16 +22,18 @@
 
   <!--
     IMPORT MAP: traduce los "nombres" de los imports a URLs reales.
-    - "three"          → núcleo de Three.js
-    - "three/addons/"  → prefijo de los complementos (VR, manos, controles, cargadores)
-    Ambos usan el MISMO proveedor (jsDelivr) y la MISMA versión (0.170.0), así los
+    - "three"          → núcleo de Three.js r170
+    - "three/addons/"  → prefijo de los complementos (manos XR, controles de escritorio)
+    - "cannon-es"      → motor de física 0.20.0 (build ES module, sin dependencias)
+    Todas las versiones están FIJADAS y salen del mismo CDN (jsDelivr). Three.js y sus
     addons comparten una sola copia del núcleo. Debe ir ANTES de cualquier módulo.
   -->
   <script type="importmap">
   {
     "imports": {
       "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
-      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
+      "cannon-es": "https://cdn.jsdelivr.net/npm/cannon-es@0.20.0/dist/cannon-es.js"
     }
   }
   </script>
@@ -48,21 +50,21 @@
       <div class="container">
         <span class="navbar-brand d-flex align-items-center gap-2">
           <img src="assets/icons/favicon.svg" alt="" width="32" height="32">
-          <span class="fw-semibold">Lab<span class="text-info">VR</span> Ensamblaje</span>
+          <span class="fw-semibold">Lab<span class="text-info">VR</span> Clasificación</span>
         </span>
-        <span class="badge rounded-pill text-bg-dark border border-info-subtle d-none d-sm-inline">3.1 Introducción a las aplicaciones VR</span>
+        <span class="badge rounded-pill text-bg-dark border border-info-subtle d-none d-sm-inline">3.2 Interacción virtual</span>
       </div>
     </nav>
 
     <div class="container py-5">
       <div class="row g-4 align-items-center">
         <div class="col-lg-7">
-          <p class="text-info fw-semibold text-uppercase small mb-2">Meta Quest 3 · Three.js · WebXR</p>
-          <h1 class="display-5 fw-bold mb-3">Laboratorio virtual de manipulación y ensamblaje 3D</h1>
+          <p class="text-info fw-semibold text-uppercase small mb-2">Meta Quest 3 · Three.js · WebXR · cannon-es</p>
+          <h1 class="display-5 fw-bold mb-3">Laboratorio inmersivo de clasificación geométrica</h1>
           <p class="lead text-body-secondary mb-4">
-            Entra a un laboratorio inmersivo y usa <strong>solo tus manos</strong> para seleccionar,
-            arrastrar y ensamblar cinco piezas geométricas en sus destinos. El cronómetro corre
-            desde tu primer agarre.
+            Veinte figuras <strong>con física real</strong> (gravedad, rebotes, fricción y colisiones)
+            están repartidas al azar sobre cuatro mesas. Tómalas con <strong>tus manos</strong> y
+            clasifícalas en sus cuatro recipientes abiertos. El cronómetro corre desde tu primer agarre.
           </p>
           <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
             <button id="btn-enter-vr" type="button" class="btn btn-info btn-lg px-4 fw-semibold" disabled aria-busy="true">
@@ -87,6 +89,11 @@
                 <li id="chk-three" class="check-item" data-state="pending">
                   <span class="check-icon" aria-hidden="true"></span>
                   <span class="check-label">Three.js (CDN)</span>
+                  <span class="check-detail">Cargando…</span>
+                </li>
+                <li id="chk-physics" class="check-item" data-state="pending">
+                  <span class="check-icon" aria-hidden="true"></span>
+                  <span class="check-label">Motor de física (cannon-es)</span>
                   <span class="check-detail">Cargando…</span>
                 </li>
                 <li id="chk-secure" class="check-item" data-state="pending">
@@ -132,40 +139,42 @@
           <div class="card h-100 step-card"><div class="card-body">
             <span class="step-number" aria-hidden="true">2</span>
             <h3 class="h6 fw-bold">Apunta</h3>
-            <p class="small text-body-secondary mb-0">Cada mano proyecta un rayo. La pieza apuntada se ilumina y crece un poco.</p>
+            <p class="small text-body-secondary mb-0">Cada mano proyecta un rayo. La figura apuntada se ilumina. También puedes acercar la mano a una figura.</p>
           </div></div>
         </li>
         <li class="col-sm-6 col-lg-3">
           <div class="card h-100 step-card"><div class="card-body">
             <span class="step-number" aria-hidden="true">3</span>
-            <h3 class="h6 fw-bold">Pellizca y arrastra</h3>
-            <p class="small text-body-secondary mb-0">Junta índice y pulgar para tomarla. Mantén la pinza y mueve la mano.</p>
+            <h3 class="h6 fw-bold">Pellizca y lleva</h3>
+            <p class="small text-body-secondary mb-0">Junta índice y pulgar para tomarla. Con agarre a distancia, aleja o acerca la mano para alejar o traer la figura.</p>
           </div></div>
         </li>
         <li class="col-sm-6 col-lg-3">
           <div class="card h-100 step-card"><div class="card-body">
             <span class="step-number" aria-hidden="true">4</span>
-            <h3 class="h6 fw-bold">Suelta en su destino</h3>
-            <p class="small text-body-secondary mb-0">Abre los dedos sobre la silueta con la misma forma y letra. Verde = correcto, rojo = inténtalo otra vez.</p>
+            <h3 class="h6 fw-bold">Suéltala en su recipiente</h3>
+            <p class="small text-body-secondary mb-0">Abre los dedos sobre el recipiente con la misma forma, letra y color. Cae por gravedad; si reposa dentro y es el correcto, cuenta. Si no, el recipiente la expulsa.</p>
           </div></div>
         </li>
       </ol>
       <div class="alert alert-warning small mt-3 mb-0" role="note">
         <strong>Gesto del sistema:</strong> si pellizcas con la <strong>palma hacia ti</strong>, se abre el menú de Meta.
-        Para tomar piezas, pellizca con la palma hacia la mesa. Para salir usa el botón 3D <em>Salir de VR</em>
+        Para tomar figuras, pellizca con la palma hacia la mesa. Para salir usa el botón 3D <em>Salir de VR</em>
         o el menú del visor.
       </div>
     </section>
 
     <div class="row g-4 mb-5">
       <section class="col-lg-7" aria-labelledby="obj-title">
-        <h2 id="obj-title" class="h3 fw-bold mb-3">Cinco objetivos</h2>
+        <h2 id="obj-title" class="h3 fw-bold mb-3">Cuatro clases, veinte figuras</h2>
         <ol id="objectives-list" class="objective-list list-unstyled">
-          <li>Cargando objetivos…</li>
+          <li>Cargando clases…</li>
         </ol>
         <p class="small text-body-secondary">
-          Una pieza es correcta si se suelta en <strong>su</strong> destino a 8 cm o menos de su centro.
-          Al acertar se ajusta sola (snap), se pone verde, suena una confirmación y queda bloqueada.
+          Una figura cuenta cuando <strong>queda en reposo dentro</strong> de un recipiente. Si es el suyo:
+          destello verde, sonido, +1 y queda bloqueada. Si no: error, destello rojo y el recipiente la
+          <strong>expulsa con un impulso físico</strong>. La precisión es aciertos ÷ (aciertos + errores).
+          <em>Reinicio aleatorio</em> vuelve a repartir las figuras entre las mesas.
         </p>
       </section>
 
@@ -174,10 +183,13 @@
         <div class="card glass-card">
           <div class="card-body">
             <dl class="row mb-0 summary">
-              <dt class="col-5">Ensambladas</dt><dd id="summary-progress" class="col-7">0/5</dd>
+              <dt class="col-5">Clasificadas</dt><dd id="summary-progress" class="col-7">0/20</dd>
+              <dt class="col-5">Errores</dt><dd id="summary-errors" class="col-7">0</dd>
+              <dt class="col-5">Precisión</dt><dd id="summary-accuracy" class="col-7">—</dd>
               <dt class="col-5">Estado</dt><dd id="summary-phase" class="col-7">Pendiente</dd>
               <dt class="col-5">Tiempo</dt><dd id="summary-time" class="col-7">00:00</dd>
             </dl>
+            <ul id="summary-bins" class="list-unstyled small text-body-secondary mb-0 mt-2" aria-label="Avance por recipiente"></ul>
           </div>
         </div>
 
@@ -198,8 +210,9 @@
       </div>
       <div id="preview-container" class="preview-container rounded-4 border border-secondary-subtle"></div>
       <p class="small text-body-secondary mt-2 mb-0">
-        <kbd>Clic izquierdo</kbd> toma o suelta piezas y pulsa botones ·
-        <kbd>Clic derecho + arrastrar</kbd> gira la cámara · <kbd>Rueda</kbd> acerca o aleja.
+        <kbd>Clic izquierdo</kbd> (mantener) toma una figura y al soltar cae · pulsa botones ·
+        <kbd>Rueda</kbd> mientras sostienes: aleja o acerca la figura ·
+        <kbd>Clic derecho + arrastrar</kbd> gira la cámara · <kbd>Rueda</kbd> acerca o aleja la cámara.
       </p>
     </section>
 
@@ -255,7 +268,8 @@
         Desarrollado por <strong class="text-body">Melissa Manzano</strong> · Desarrollo de Ambientes Virtuales · 2026
       </p>
       <p class="mb-0">
-        Hecho con <a href="https://threejs.org/" class="link-info">Three.js</a> r170 (MIT) y
+        Hecho con <a href="https://threejs.org/" class="link-info">Three.js</a> r170 (MIT),
+        <a href="https://github.com/pmndrs/cannon-es" class="link-info">cannon-es</a> 0.20.0 (MIT) y
         <a href="https://getbootstrap.com/" class="link-info">Bootstrap</a> 5.3.3 (MIT) ·
         Modelos de mano: WebXR Input Profiles (MIT)
       </p>

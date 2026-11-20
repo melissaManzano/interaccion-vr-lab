@@ -3,8 +3,10 @@
  *
  * NO sustituye la experiencia VR. Sirve para probar reglas, contador, cronómetro y
  * panel sin el visor:
- *   - Clic izquierdo: tomar y soltar piezas, o pulsar botones (simula la pinza).
- *   - Clic derecho + arrastrar: girar la cámara.  Rueda: acercar o alejar.
+ *   - Clic izquierdo (mantener): tomar una figura; al soltar el botón cae. También pulsa botones.
+ *   - Clic derecho + arrastrar: girar la cámara.  Rueda: acercar o alejar la cámara.
+ *   - Rueda MIENTRAS se sostiene una figura: la aleja o la acerca (equivale a estirar
+ *     o recoger el brazo en VR).
  * El mouse se expone como una "fuente de puntero" igual a una mano.
  * Se desactiva automáticamente durante la sesión VR.
  */
@@ -32,6 +34,8 @@ export function createDesktopPreview({ camera, domElement, position, target }) {
   let enabled = true;
   let hasPointer = false;
   let buttonDown = false;
+  let reach = 0; // "brazo virtual" del mouse, controlado con la rueda durante el arrastre
+  const REACH_PER_WHEEL_PIXEL = 0.0006;
 
   function updateNdc(event) {
     const rect = domElement.getBoundingClientRect();
@@ -45,13 +49,21 @@ export function createDesktopPreview({ camera, domElement, position, target }) {
     updateNdc(event);
     hasPointer = true;
     buttonDown = true;
+    reach = 0;
+    controls.enableZoom = false; // la rueda pasa a controlar la profundidad del arrastre
     domElement.setPointerCapture?.(event.pointerId);
     queue.push('start');
   };
   const onPointerUp = (event) => {
     if (event.button !== 0 || !buttonDown) return;
     buttonDown = false;
+    controls.enableZoom = true;
     queue.push('end');
+  };
+  const onWheel = (event) => {
+    if (!enabled || !buttonDown) return;
+    event.preventDefault();
+    reach -= event.deltaY * REACH_PER_WHEEL_PIXEL; // rueda hacia adelante = más lejos
   };
   const onPointerLeave = () => { if (!buttonDown) hasPointer = false; };
   const onContextMenu = (event) => event.preventDefault();
@@ -62,6 +74,7 @@ export function createDesktopPreview({ camera, domElement, position, target }) {
   domElement.addEventListener('pointercancel', onPointerUp);
   domElement.addEventListener('pointerleave', onPointerLeave);
   domElement.addEventListener('contextmenu', onContextMenu);
+  domElement.addEventListener('wheel', onWheel, { passive: false });
 
   return {
     /** Devuelve la fuente "mouse" para este frame. */
@@ -71,7 +84,7 @@ export function createDesktopPreview({ camera, domElement, position, target }) {
       camera.updateMatrixWorld();
       raycaster.setFromCamera(ndc, camera);
       ray.copy(raycaster.ray);
-      return { id: 'mouse', active: hasPointer || buttonDown, ray, event: queue.shift() ?? null };
+      return { id: 'mouse', active: hasPointer || buttonDown, ray, event: queue.shift() ?? null, reach };
     },
 
     applyFeedback(feedback) {
@@ -108,6 +121,7 @@ export function createDesktopPreview({ camera, domElement, position, target }) {
       domElement.removeEventListener('pointercancel', onPointerUp);
       domElement.removeEventListener('pointerleave', onPointerLeave);
       domElement.removeEventListener('contextmenu', onContextMenu);
+      domElement.removeEventListener('wheel', onWheel);
       controls.dispose();
     },
   };

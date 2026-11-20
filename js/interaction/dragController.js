@@ -1,21 +1,24 @@
 /**
- * dragController.js — Arrastre estable de piezas a lo largo del rayo.
+ * dragController.js — Calcula DÓNDE quiere la mano que esté la figura sostenida.
  *
- * Al agarrar se guardan:
- *   - la distancia del origen del rayo al punto de impacto, y
- *   - el OFFSET entre el punto de impacto y el centro de la pieza.
- * En cada frame, posición deseada = origen + dirección·distancia + offset.
- * Así la pieza no "salta" al centro del rayo.
+ * Ya no mueve mallas: entrega un punto objetivo por cuadro y la física (holdController)
+ * lleva el cuerpo hacia allí respetando las colisiones.
  *
- * Estabilidad: la posición se suaviza con un filtro exponencial independiente de
- * los FPS y se limita a un volumen sobre la mesa (no atraviesa la mesa ni se aleja).
- * La orientación no cambia durante el arrastre; el snap la corrige al acertar.
+ * Dos modos de agarre:
+ *  - Cercano: la pinza se cerró junto a la figura. El objetivo es el punto de pinza
+ *    más el offset inicial: la figura va "pegada" a los dedos.
+ *  - A distancia (rayo): se guarda la distancia del rayo y el offset del impacto.
+ *    Objetivo = origen + dirección·distancia + offset. Además, alejar o acercar la mano
+ *    del cuerpo cambia esa distancia (×reelGain): así se puede traer una figura de una
+ *    mesa lejana hasta los recipientes sin caminar.
+ *
+ * El objetivo se limita a un volumen de la sala (bounds).
  */
 import * as THREE from 'three';
 
-export function createDragController({ bounds, smoothing, minDistance, maxDistance, moveThreshold }) {
+export function createDragController({ bounds, minDistance, maxDistance, reelGain }) {
   const active = new Map(); // sourceId → datos del arrastre
-  const desired = new THREE.Vector3();
+  const target = new THREE.Vector3();
 
   function clampToBounds(v) {
     v.x = THREE.MathUtils.clamp(v.x, bounds.minX, bounds.maxX);
@@ -27,49 +30,51 @@ export function createDragController({ bounds, smoothing, minDistance, maxDistan
   return {
     has: (sourceId) => active.has(sourceId),
 
-    isPieceDragged(pieceId) {
-      for (const d of active.values()) if (d.pieceId === pieceId) return true;
-      return false;
-    },
-
-    begin(sourceId, { pieceId, object, ray, hitPoint }) {
+    /**
+     * @param {string} sourceId
+     * @param {object} p
+     * @param {string} p.objectId
+     * @param {THREE.Vector3} p.objectPosition  centro actual de la figura
+     * @param {THREE.Ray} p.ray
+     * @param {THREE.Vector3} p.hitPoint        punto de impacto (o el centro, en agarre cercano)
+     * @param {boolean} p.near
+     * @param {number} p.reach                   alcance de la mano (distancia cabeza–mano)
+     */
+    begin(sourceId, { objectId, objectPosition, ray, hitPoint, near, reach }) {
       if (active.has(sourceId)) throw new Error(`La fuente ${sourceId} ya está arrastrando.`);
-      const distance = THREE.MathUtils.clamp(ray.origin.distanceTo(hitPoint), minDistance, maxDistance);
+      const rawDistance = ray.origin.distanceTo(hitPoint);
+      const distance = near ? rawDistance : THREE.MathUtils.clamp(rawDistance, minDistance, maxDistance);
       active.set(sourceId, {
-        pieceId,
-        object,
+        objectId,
+        near,
         distance,
-        offset: object.position.clone().sub(hitPoint),
-        startPosition: object.position.clone(),
-        moving: false,
+        startReach: reach,
+        offset: objectPosition.clone().sub(hitPoint),
       });
     },
 
-    /** @returns {{pieceId, startedMoving:boolean, distance:number} | null} */
-    update(sourceId, ray, deltaSeconds) {
+    /**
+     * @returns {{objectId, target:THREE.Vector3, length:number} | null}
+     *   target se reutiliza entre llamadas: cópialo si necesitas guardarlo.
+     */
+    update(sourceId, ray, reach) {
       const drag = active.get(sourceId);
       if (!drag) return null;
-      ray.at(drag.distance, desired).add(drag.offset);
-      clampToBounds(desired);
-      const alpha = 1 - Math.exp(-smoothing * Math.max(0, deltaSeconds));
-      drag.object.position.lerp(desired, alpha);
-
-      let startedMoving = false;
-      if (!drag.moving && drag.object.position.distanceTo(drag.startPosition) > moveThreshold) {
-        drag.moving = true;
-        startedMoving = true;
+      let distance = drag.distance;
+      if (!drag.near) {
+        distance = THREE.MathUtils.clamp(drag.distance + (reach - drag.startReach) * reelGain, minDistance, maxDistance);
       }
-      return { pieceId: drag.pieceId, startedMoving, distance: ray.origin.distanceTo(drag.object.position) };
+      ray.at(distance, target).add(drag.offset);
+      clampToBounds(target);
+      return { objectId: drag.objectId, target, length: distance };
     },
 
-    /** Termina el arrastre de una fuente y devuelve sus datos (o null). */
     end(sourceId) {
       const drag = active.get(sourceId) ?? null;
       active.delete(sourceId);
       return drag;
     },
 
-    /** Termina todos los arrastres y los devuelve. */
     endAll() {
       const all = [...active.values()];
       active.clear();

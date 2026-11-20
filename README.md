@@ -1,13 +1,15 @@
-# Laboratorio virtual de manipulación y ensamblaje 3D
+# Laboratorio inmersivo de clasificación geométrica
 
-Aplicación web de **realidad virtual inmersiva** para **Meta Quest 3**. Con **seguimiento de manos** (sin mandos), el usuario selecciona, arrastra y ensambla cinco piezas geométricas en sus cinco destinos.
+Aplicación web de **realidad virtual inmersiva** para **Meta Quest 3** con **física real**. Veinte figuras geométricas de cuatro clases están repartidas al azar sobre cuatro mesas. Con **seguimiento de manos** y **gesto de pinza**, el usuario las toma y las clasifica en cuatro recipientes 3D abiertos. Gravedad, rebotes, fricción y colisiones las calcula un motor de física; no son animaciones.
 
-- **Materia:** Desarrollo de Ambientes Virtuales — 3.1 Introducción a las aplicaciones VR
+- **Materia:** Desarrollo de Ambientes Virtuales — 3.2 Interacción virtual (amplía la práctica 3.1)
 - **Autora:** Melissa Manzano
-- **Tecnologías:** HTML5, CSS3, Bootstrap 5.3.3, JavaScript (módulos ES), Three.js r170, WebXR Device API
-- **Sitio publicado:** https://melissamanzano.github.io/laboratorio-vr-ensamblaje/
-- **Repositorio:** https://github.com/melissaManzano/laboratorio-vr-ensamblaje
+- **Tecnologías:** HTML5, CSS3, Bootstrap 5.3.3, JavaScript (módulos ES), Three.js r170, WebXR Device API, **cannon-es 0.20.0**
+- **Sitio publicado:** https://melissamanzano.github.io/interaccion-vr-lab/
+- **Repositorio:** https://github.com/melissaManzano/interaccion-vr-lab
 - **Video de demostración:** *(agregar enlace)*
+
+> Este repositorio amplía la práctica 3.1 ([laboratorio-vr-ensamblaje](https://github.com/melissaManzano/laboratorio-vr-ensamblaje)).
 
 ---
 
@@ -19,7 +21,7 @@ Aplicación web de **realidad virtual inmersiva** para **Meta Quest 3**. Con **s
 | Publicar | Una cuenta de GitHub (repositorio público) |
 | Probar en VR | Meta Quest 3, **Meta Quest Browser** actualizado y el **seguimiento de manos activado** (*Configuración → Movimiento → Seguimiento de manos*) |
 
-**No se usan** Node.js, npm, bundlers, frameworks ni backend. Todo son archivos estáticos.
+**No se usan** Node.js (salvo para las pruebas opcionales), npm, bundlers, backend ni base de datos. Todo son archivos estáticos y bibliotecas por CDN.
 
 ## 2. Ejecutar en local (Live Server)
 
@@ -29,219 +31,222 @@ Aplicación web de **realidad virtual inmersiva** para **Meta Quest 3**. Con **s
 
 > No abras `index.html` con doble clic (`file://`): los módulos ES y el import map fallan por CORS.
 
-En la PC, el botón muestra **"VR no disponible aquí"**, y es lo normal. La sección **Vista previa de depuración** permite probar la lógica con el mouse:
+En la PC el botón muestra **"VR no disponible aquí"**, y es lo normal. La **Vista previa de depuración** usa la misma escena y la misma física con el mouse:
 
-- **Clic izquierdo** toma o suelta piezas y pulsa botones.
-- **Clic derecho y arrastrar** gira la cámara.
-- **La rueda** acerca o aleja.
+| Acción | Control |
+|---|---|
+| Tomar una figura | Mantener **clic izquierdo** sobre ella |
+| Soltarla | Soltar el botón: cae con gravedad |
+| Alejar o acercar la figura sostenida | **Rueda** mientras la sostienes |
+| Girar la cámara | **Clic derecho** y arrastrar |
+| Acercar o alejar la cámara | **Rueda** sin sostener nada |
 
 > ⚠️ El `localhost` de la PC **no es** el `localhost` del visor. Las pruebas con manos se hacen en el Quest **con la URL HTTPS de GitHub Pages**.
-> (Opcional) La extensión **Immersive Web Emulator** de Meta para Chrome simula un visor en el escritorio.
 
 ## 3. Publicar en GitHub Pages
 
 ```bash
-git init -b main
 git add .
-git commit -m "Laboratorio VR de ensamblaje 3D"
-git remote add origin https://github.com/<usuario>/laboratorio-vr-ensamblaje.git
-git push -u origin main
+git commit -m "Práctica 3.2: clasificación con física"
+git push
 ```
 
 1. En GitHub, ve a **Settings → Pages**.
 2. En **Source** elige **Deploy from a branch**, **Branch: `main`**, carpeta **`/ (root)`** y pulsa **Save**.
-3. Espera uno o dos minutos y abre `https://<usuario>.github.io/laboratorio-vr-ensamblaje/`.
+3. Espera uno o dos minutos y abre `https://<usuario>.github.io/interaccion-vr-lab/`.
 4. En el Quest, abre esa URL en Meta Quest Browser y pulsa **Entrar a VR**.
 
-El archivo `.nojekyll` (vacío) evita que GitHub Pages procese el sitio con Jekyll.
+El archivo `.nojekyll` evita que GitHub Pages procese el sitio con Jekyll.
 
-### Rutas en GitHub Pages
+**Rutas.** Todas las rutas internas son **relativas** (`css/styles.css`, `js/main.js`), porque el sitio vive bajo `/interaccion-vr-lab/`. Una ruta que empiece con `/` daría **404**. GitHub Pages **distingue mayúsculas de minúsculas** y Windows no, así que hay que respetarlas en los `import`.
 
-GitHub Pages publica el sitio bajo `/laboratorio-vr-ensamblaje/`. Por eso **todas** las rutas internas son relativas, como `css/styles.css`, `js/main.js` o `assets/icons/favicon.svg`. Si una ruta empezara con `/`, apuntaría a la raíz del dominio y daría **404**.
-
-GitHub Pages **distingue mayúsculas de minúsculas** y Windows no. Un import `./Ui/vrPanel.js` funciona en Windows y falla al publicar.
-
-## 4. Controles (dentro de VR)
+## 4. Controles en VR
 
 | Acción | Gesto |
 |---|---|
 | Apuntar | Cada mano proyecta un rayo desde el punto entre el pulgar y el índice |
-| Tomar | Pinza (índice + pulgar) mientras apuntas a una pieza |
-| Arrastrar | Mantén la pinza y mueve la mano |
-| Soltar y validar | Abre los dedos |
-| Reiniciar o salir | Apunta al botón 3D y haz la pinza |
+| Tomar de cerca | Cierra la pinza **junto a** una figura (a menos de 7 cm) |
+| Tomar a distancia | Apunta con el rayo y cierra la pinza |
+| Alejar o acercar | Con agarre a distancia, **estira o recoge el brazo** |
+| Soltar o lanzar | Abre los dedos: la figura conserva la velocidad de tu mano |
+| Reinicio aleatorio o salir | Apunta al botón 3D y cierra la pinza |
 
-Colores del rayo: **blanco** sin objetivo, **celeste** sobre una pieza, **amarillo** sobre un botón y **verde** mientras arrastras.
+Colores del rayo: **blanco** sin objetivo, **celeste** sobre una figura, **amarillo** sobre un botón y **verde** mientras sostienes.
 
 > La pinza con la **palma hacia ti** es el gesto del sistema Meta (abre el menú). La app la ignora.
 
-## 5. Reglas del laboratorio
+## 5. El laboratorio
 
-| Pieza | Forma | Color | Destino |
-|---|---|---|---|
-| A | Cubo | Naranja | Silueta de cubo + "A · Cubo" |
-| B | Esfera | Azul | Silueta de esfera + "B · Esfera" |
-| C | Cono | Amarillo | Silueta de cono + "C · Cono" |
-| D | Cilindro | Rosa | Silueta de cilindro + "D · Cilindro" |
-| E | Prisma triangular | Morado | Silueta de prisma + "E · Prisma triangular" |
+**Escena:**
 
-Cada pieza se reconoce por **forma, color y letra**, no solo por color. El rojo y el verde se reservan para error y acierto.
+- **4 mesas** con borde bajo: a la izquierda y a la derecha, cerca y lejos.
+- **1 mostrador central** con **4 recipientes abiertos** (27 × 27 × 14 cm).
+- **Marcador 3D** encima del mostrador, con los botones *Reinicio aleatorio* y *Salir de VR*.
 
-La validación ocurre **solo al soltar**. Primero se busca el destino más cercano dentro de `detectionRadius`:
+**Clases** (5 figuras de cada una, 20 en total):
 
-| Resultado | Condición | Efecto |
-|---|---|---|
-| ✅ Acierto | Destino correcto y distancia ≤ `tolerance` | Snap de posición y orientación, sonido, verde y ✓, pieza bloqueada, +1 |
-| ❌ Destino incorrecto | El destino más cercano no es el suyo | Destello rojo, sonido grave y mensaje. No suma |
-| ❌ Distancia excesiva | Es su destino, pero la distancia está entre `tolerance` y `detectionRadius` | Destello rojo y mensaje con los cm. No suma |
-| ↩ Fuera de zona | No hay ningún destino cerca | La pieza vuelve a su lugar |
+| Clase | Figura | Color | Recipiente | Colisionador |
+|---|---|---|---|---|
+| A | Cubo (6 cm) | Naranja | R1 · A · Cubos | `Box` |
+| B | Esfera (Ø 6.8 cm) | Azul | R2 · B · Esferas | `Sphere` |
+| C | Cilindro (Ø 6 × 7 cm) | Rosa | R3 · C · Cilindros | `Cylinder` de 16 lados |
+| D | Prisma triangular | Morado | R4 · D · Prismas | `Cylinder` de 3 lados (convexo exacto) |
 
-**Qué mide la distancia:** la separación euclidiana 3D, en metros, entre el **centro de la pieza** y el **punto de anclaje** del destino, que es donde quedaría el centro de la pieza bien colocada.
+Cada clase se reconoce por **forma, color y letra**. Cada recipiente lleva además su nombre y una **silueta flotante** de la figura que le corresponde. El rojo y el verde se reservan para error y acierto.
 
-Los valores se ajustan en `js/config.js`, sin tocar la lógica:
+### Reglas
 
-```js
-rules: { tolerance: 0.08, detectionRadius: 0.2, errorFlashMs: 1200, messageMs: 3500 }
-```
+**Soltar no valida.** La figura cae y la validación ocurre cuando **queda en reposo dentro** de un recipiente (350 ms casi quieta):
+
+| Resultado | Efecto |
+|---|---|
+| ✅ Recipiente correcto | +1 total (X/20) y +1 en su recipiente (X/5), destello verde, sonido, figura bloqueada |
+| ❌ Recipiente equivocado | +1 error, destello rojo, mensaje con el recipiente correcto y **el recipiente la expulsa con un impulso físico** |
+| 🏁 Recipiente 5/5 | Se registra su **tiempo de llenado** y su borde se pone verde |
+| 🏆 20/20 | Se detiene el cronómetro y aparece el resumen final |
 
 **Indicadores:**
 
-- **Contador:** va de 0/5 a 5/5. Se calcula a partir del estado de las piezas, así que no puede duplicarse.
-- **Cronómetro:** arranca con el primer agarre, se pausa fuera de VR y se detiene al completar.
-- **Estados:** Pendiente, Activo, Error (breve) y Completado.
+| Indicador | Qué muestra |
+|---|---|
+| Clasificadas | De 0/20 a 20/20 |
+| Por recipiente | De 0/5 a 5/5, en el marcador y en una pantalla detrás de cada recipiente |
+| Errores | Una vez por intento. Si una figura equivocada recae en el mismo recipiente, se expulsa otra vez sin contar otro error |
+| Precisión | Aciertos ÷ (aciertos + errores). Muestra "—" antes del primer intento |
+| Tiempo global | Arranca con el primer agarre, se pausa fuera de VR y se detiene en 20/20 |
+| Tiempo de llenado | El tiempo global en el momento en que cada recipiente llega a 5/5 |
+
+**Reinicio aleatorio.** Vuelve a repartir las 20 figuras entre las mesas, en posiciones y giros nuevos, y pone en cero todo lo anterior.
+
+**Recuperación.** Si una figura sale de la sala, vuelve a su mesa. Las que caen al suelo se pueden recoger con el rayo.
+
+Todo se ajusta en [js/config.js](js/config.js) sin tocar la lógica: medidas, masas, fricción, rebote, umbrales de reposo, fuerza de expulsión, etc.
 
 ## 6. Arquitectura
 
 ```
-index.html              Portada Bootstrap + import map + carga de módulos
-css/styles.css          Estilos propios de la portada
-assets/icons/           Favicon (SVG)
+index.html                Portada Bootstrap + import map (three, three/addons, cannon-es)
+css/styles.css            Estilos de la portada
 js/
-├── bootGuard.js        Script clásico: muestra un error si el CDN o los módulos fallan
-├── main.js             Punto de entrada: conecta módulos y ejecuta el ciclo de render
-├── config.js           Medidas, reglas, piezas y destinos (un solo lugar para ajustar)
-├── core/state.js       Estado central único (piezas, fase, cronómetro, XR, mensajes)
+├── main.js               Conecta las capas y ejecuta el ciclo de cada cuadro
+├── config.js             Clases, mesas, recipientes, física y reglas (un solo lugar)
+├── bootGuard.js          Muestra un error útil si el CDN o los módulos fallan
+├── core/state.js         Estado único: figuras, recipientes, aciertos, errores, fase, cronómetro
+├── scene/                RENDERIZADO
+│   ├── sceneSetup.js       Renderer, cámara, luces, sala
+│   └── labBuilder.js       Mesas con borde, mostrador, recipientes abiertos y su apariencia
+├── physics/              FÍSICA (cannon-es)
+│   ├── physicsWorld.js     Mundo, gravedad, materiales, colisionadores estáticos, paso fijo
+│   ├── colliders.js        Malla + colisionador de cada figura con las mismas medidas
+│   └── holdController.js   Sostener una figura por velocidad sin romper colisiones
+├── objects/              GENERACIÓN
+│   ├── objectFactory.js    Crea las 20 figuras (malla + cuerpo rígido) y sincroniza
+│   └── layoutGenerator.js  Reparto aleatorio sobre las mesas (puro, con semilla opcional)
+├── interaction/          INTERACCIÓN
+│   ├── selectables.js      Seleccionables con prioridad (botón > figura) y búsqueda cercana
+│   ├── dragController.js   Objetivo del agarre: cercano o rayo + "carrete"
+│   └── interactionManager.js  Manos/mouse → agarrar, sostener, soltar, botones
+├── validation/           VALIDACIÓN
+│   ├── sortingRules.js     Reglas puras: dentro del recipiente, acierto/error, precisión
+│   └── sortingMonitor.js   Observa la física: reposo → depósito; expulsión; recuperación
 ├── logic/
-│   ├── assemblyRules.js  Validación PURA al soltar (sin Three.js; se puede probar sola)
-│   ├── gameMachine.js    Máquina de estados del reto
-│   └── timer.js          Cronómetro con pausa/reanudación
-├── scene/
-│   ├── sceneSetup.js     Renderer, cámara, luces, piso delimitado y sala
-│   └── labBuilder.js     Mesa, piezas, destinos y su apariencia
-├── xr/
-│   ├── xrSession.js      Detección de soporte y ciclo de vida de immersive-vr
-│   ├── hands.js          Manos izq./der., modelos, rayos y pérdida de tracking
-│   └── pinchDetector.js  Pinza por articulaciones con histéresis + filtro del gesto del sistema
-├── interaction/
-│   ├── selectables.js    Lista cerrada de objetos seleccionables con prioridad (botón > pieza)
-│   ├── dragController.js Arrastre con offset, suavizado y límites
-│   └── interactionManager.js  Une manos/mouse, raycast, botones y juego
-├── ui/
-│   ├── vrPanel.js        HUD 3D (canvas → textura): título, 0/5, tiempo, estado, mensajes
-│   ├── vrButtons.js      Botones 3D Reiniciar / Salir de VR
-│   ├── canvasText.js     Utilidades de texto en canvas
-│   └── landingUI.js      Portada HTML: compatibilidad, errores, objetivos, resumen
-├── audio/soundFx.js    Sonidos sintetizados con Web Audio (sin archivos)
-└── debug/desktopPreview.js  Vista previa con mouse (solo escritorio)
-tests/logic.test.mjs    Pruebas de reglas de negocio con Node (no se publican como parte de la app)
-docs/                   Documentos de diseño (WebXR, seguimiento de manos, arquitectura y verificación)
+│   ├── gameMachine.js      Máquina de estados: agarres, depósitos, llenado, fin, reinicio
+│   └── timer.js            Cronómetro con pausa
+├── ui/                   MARCADOR
+│   ├── scoreboard.js       Marcador 3D: X/20, tiempo, errores, precisión, 0/5 y llenado por recipiente
+│   ├── binDisplays.js      Pantalla 0/5 detrás de cada recipiente
+│   ├── vrButtons.js        Botones 3D
+│   ├── canvasText.js       Texto en canvas
+│   └── landingUI.js        Portada: compatibilidad, clases, resumen
+├── xr/                   Sin cambios desde 3.1: sesión, manos, pinza con histéresis
+├── audio/soundFx.js      Sonidos sintetizados (incluye golpes según la velocidad de impacto)
+└── debug/desktopPreview.js  Vista previa con mouse (escritorio)
+tests/logic.test.mjs      31 pruebas de reglas de negocio con Node
+docs/                     Diseño WebXR (3.1) y física/clasificación (3.2)
 ```
 
-El razonamiento de esta arquitectura y el flujo de interacción están en [docs/02-webxr-y-arquitectura.md](docs/02-webxr-y-arquitectura.md). La revisión de la primera versión (restricciones, import map, licencias, Console/Network y correcciones) está en [docs/03-generacion-y-revision.md](docs/03-generacion-y-revision.md).
+El razonamiento completo está en [docs/04-fisica-y-clasificacion.md](docs/04-fisica-y-clasificacion.md):
+
+- elección y versiones de cannon-es;
+- import map;
+- tabla de colisionadores;
+- control por velocidad;
+- validación;
+- accesibilidad;
+- verificación realizada;
+- licencias.
+
+Los fundamentos de WebXR y del seguimiento de manos siguen en [docs/02-webxr-y-arquitectura.md](docs/02-webxr-y-arquitectura.md).
 
 **Decisiones principales:**
 
-- **Las reglas no dependen de Three.js.** Son funciones puras, así que se prueban sin visor y es fácil razonar sobre ellas.
-- **Hay un solo estado central.** El HUD y la portada solo leen; nadie guarda su propio contador.
-- **Manos y mouse son "fuentes de puntero" con la misma forma.** Toda la interacción se programa una sola vez.
-- **No se descargan modelos.** Todo se genera con Three.js, salvo la malla de las manos, que viene de WebXR Input Profiles. Si ese CDN falla, en `config.js` se cambia `hands.modelProfile` a `'spheres'`.
-- **Los sonidos se sintetizan.** No hay archivos que puedan dar 404 ni licencias que gestionar.
+- **La física manda.** La malla solo copia la pose interpolada del cuerpo rígido. No hay *snap* ni animaciones que simulen caídas.
+- **Sostener sin romper la física.** La figura en la mano sigue siendo dinámica y se mueve por velocidad, así que choca con mesas, paredes y otras figuras. Al soltarla conserva su velocidad.
+- **Validar en reposo, no al soltar.** Un rebote que saca la figura no cuenta, y un lanzamiento que entra sí cuenta.
+- **Reglas puras.** Lo que decide aciertos, errores, precisión y distribución no depende de Three.js ni de cannon-es, y se prueba con Node.
+- **Un solo estado.** Los totales se calculan desde el estado; el marcador, las pantallas y la portada solo leen.
 
-### El import map
+## 7. Rendimiento y estabilidad
 
-```html
-<script type="importmap">
-{ "imports": {
-    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
-    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
-} }
-</script>
-```
+- **Física:**
+  - paso fijo de 1/90 s (máximo 4 subpasos por cuadro), con interpolación para dibujar sin tirones;
+  - broadphase SAP y cuerpos que se duermen en reposo;
+  - 20 cuerpos dinámicos y 10 estáticos.
+- **Estabilidad:**
+  - formas primitivas o convexas (sin Trimesh);
+  - paredes de 2 cm;
+  - velocidad máxima al sostener (5 m/s) y al soltar (3.5 m/s);
+  - figuras creadas sin encimarse;
+  - recuperación de las que escapan.
+- **Render:**
+  - sin sombras dinámicas ni posprocesado, con dos luces;
+  - una geometría por clase;
+  - los canvas solo se redibujan cuando cambia el texto.
+- **Memoria:** el ciclo reutiliza vectores. Al salir de la página se liberan cuerpos, geometrías, materiales y texturas.
 
-El navegador no sabe qué es `import * as THREE from 'three'`, porque `'three'` es un nombre y no una ruta. El import map le dice a qué URL corresponde.
-
-- **Prefijo de addons.** La entrada `"three/addons/"` termina en `/`, así que funciona como prefijo: `three/addons/webxr/XRHandModelFactory.js` se convierte en `…/examples/jsm/webxr/XRHandModelFactory.js`.
-- **Una sola copia del núcleo.** Los addons también importan `'three'` internamente y el mapa los manda a la **misma** URL. Si hubiera dos versiones distintas, aparecería "Multiple instances of Three.js".
-- **Posición en el HTML.** Debe ir **antes** de cualquier `<script type="module">`.
-- **Imports propios.** Los imports locales (`./config.js`, `../core/state.js`) son relativos al archivo que importa y no pasan por el mapa.
-
-## 7. Seguimiento de manos: detalles técnicos
-
-- **Sesión.** Se usa `immersive-vr` con `optionalFeatures: ['local-floor', 'bounded-floor', 'hand-tracking']`. Las manos son *opcionales* para que la sesión abra igual y el HUD pueda avisar si no hay manos. No se usa AR, passthrough ni cámaras.
-- **Pinza.** Se calcula la distancia entre las articulaciones `index-finger-tip` y `thumb-tip`:
-  - se **cierra** por debajo de 2 cm y se **abre** por encima de 3.5 cm (histéresis);
-  - no depende de `selectstart`/`selectend`; la consola registra `selectstart nativo` solo para diagnóstico.
-- **Gesto del sistema.** Si la palma apunta hacia la cabeza (eje −Y de la muñeca · dirección a la cabeza > 0.6), la pinza se ignora. Si en el visor bloquea pinzas normales, se ajusta `pinch.palmFacingDot` o se desactiva con `pinch.ignorePalmFacing` en `config.js`.
-- **Arrastre.** Al agarrar se guarda la distancia del rayo y el offset del punto de agarre. La posición se suaviza con un filtro exponencial y se limita a un volumen sobre la mesa.
-- **Exclusividad.** Una pieza solo puede estar en una mano. Una pieza colocada no se puede volver a tomar.
-- **Pérdida de tracking.** Se toleran unos 10 frames. Si la mano no vuelve, la pieza se libera **sin validar** y regresa a su lugar.
-- **Salida del sistema.** Si la sesión termina por el menú del visor, se cancelan los arrastres, se limpian las manos, se pausa el cronómetro y se restaura la portada.
-
-## 8. Rendimiento y depuración
-
-**Optimizaciones aplicadas:**
-
-- **Iluminación:** sin sombras dinámicas, sin posprocesado y con solo dos luces.
-- **Geometría:** piezas de pocos polígonos, con la geometría compartida entre cada pieza y su silueta.
-- **Panel 3D:** solo se redibuja cuando cambia el texto. Mientras corre el reto, el tiempo se muestra en segundos (alrededor de un redibujo por segundo).
-- **Memoria:** el ciclo de cada frame reutiliza vectores, así que casi no genera basura.
-- **Limpieza:** al salir de la página (`pagehide`) se liberan escuchas, geometrías, materiales y texturas.
-
-**Cómo verificar:**
-
-- **Errores:** abre DevTools (F12). En **Console** busca errores en rojo. En **Network**, filtra por JS y comprueba que todo responda 200 (sin 404 ni CORS).
-- **Rendimiento real en el Quest:** usa la depuración remota. Conecta el visor por USB con el modo desarrollador activado y abre `chrome://inspect` en la PC. También sirve el *OVR Metrics Tool* de Meta.
+**Cómo verificar en el visor:** depuración remota con el Quest por USB (modo desarrollador) en `chrome://inspect`, y *OVR Metrics Tool* para los FPS.
 
 > No se reportan FPS porque no se han medido en el dispositivo.
 
-## 9. Matriz de pruebas de aceptación
+## 8. Matriz de pruebas de aceptación
 
 | # | Requisito | Cómo probar | Resultado esperado | Resultado observado | Evidencia |
 |---|---|---|---|---|---|
-| 1 | Portada responsiva, favicon, créditos, compatibilidad | Escritorio y modo dispositivo de DevTools | Sin cortes, favicon visible, checks correctos | | |
-| 2 | Live Server sin errores | Console y Network | 0 errores, todo 200 | | |
-| 3 | Import map | Network: three.module.js + addons | Cargan desde jsDelivr 0.170.0 | | |
-| 4 | Despliegue Pages main/(root) | Abrir la URL HTTPS | Carga igual que en local | | |
-| 5 | Sesión VR real y salida segura | Quest → Entrar a VR → Salir de VR | Fondo virtual opaco, regresa a la portada | | |
-| 6 | Mano izq. y der. | HUD "Izquierda ✓ Derecha ✓" | Ambas detectadas | | |
-| 7 | Apuntar, resaltar, pinza, arrastrar, soltar | Con cada mano | Pieza se ilumina, se mueve estable | | |
-| 8 | 5 objetos y 5 destinos distintos | Observación | Forma + color + letra | | |
-| 9 | Error de destino y de distancia | Soltar A en C; soltar A a ~12 cm de su centro | Rojo + mensaje, contador sin cambio | | |
-| 10 | 5 aciertos | Colocar las 5 | Snap, verde, sonido, bloqueo | | |
-| 11 | 0/5 → 5/5, cronómetro, mensaje final | Completar | Tiempo se detiene, mensaje con tiempo | | |
-| 12 | Reiniciar durante y después | Botón Reiniciar | Todo vuelve a 0/5, 00:00, posiciones iniciales | | |
-| 13 | Salir y reentrar | Salir (botón y menú del sistema) y volver | Progreso conservado, sin piezas pegadas | | |
-| 14 | Botones e info 3D en el visor | Usar Reiniciar/Salir con pinza | Responden con cambio visual | | |
-| 15 | Modularidad, assets, créditos | Revisión del código y README | Estructura documentada | | |
+| 1 | Portada, compatibilidad (incluye cannon-es) | Escritorio y modo dispositivo | Todo visible, checks correctos | ✅ Escritorio (Chrome headless) | |
+| 2 | Sin errores; import map con versiones fijadas | Console y Network | 0 errores; three 0.170.0 y cannon-es 0.20.0 en 200 | ✅ Local | |
+| 3 | Despliegue en Pages (HTTPS) | Abrir https://melissamanzano.github.io/interaccion-vr-lab/ | Igual que en local | | |
+| 4 | Sesión VR real y salida | Quest → Entrar a VR → Salir | Fondo virtual, vuelve a la portada | | |
+| 5 | Manos izquierda y derecha | Marcador "Izquierda ✓ Derecha ✓" | Ambas detectadas | | |
+| 6 | 4 mesas, 20 figuras (4 × 5) al azar | Observación y reinicio | 5 por mesa, clases mezcladas | ✅ Escritorio | |
+| 7 | Gravedad y reposo | Al cargar | Las figuras caen y se asientan | ✅ Escritorio | |
+| 8 | Pinza cercana y a distancia | Con cada mano | La figura sigue a la mano y choca | Mouse ✅ / Quest pendiente | |
+| 9 | Colisiones con mesa, suelo, recipiente y otras figuras | Empujar, soltar sobre el borde, apilar | No atraviesa nada; rebota y rueda | ✅ Escritorio (borde, pila) | |
+| 10 | Acierto | Figura en su recipiente | Verde, sonido, +1, X/5 | ✅ Escritorio | |
+| 11 | Error y expulsión | Figura en otro recipiente | Rojo, +1 error, sale del recipiente | ✅ Escritorio (6/6) | |
+| 12 | Precisión y tiempos de llenado | Llenar un recipiente | 5/5 con tiempo; precisión correcta | ✅ Escritorio | |
+| 13 | 20/20 y fin | Completar todo | Cronómetro detenido, resumen | ✅ Pruebas de lógica | |
+| 14 | Reinicio aleatorio | Botón 3D | 0/20, nueva distribución | ✅ Escritorio | |
+| 15 | Salir y reentrar | Botón y menú del sistema | Progreso conservado; figuras en mano caen | | |
+| 16 | Rendimiento y comodidad en el visor | OVR Metrics, uso de 5 min | Fluido y sin mareo | | |
 
-**Probado solo en escritorio:**
+**Pruebas automatizadas:** `node --test tests/logic.test.mjs` (Node 18+, sin npm) da **31/31**.
 
-- Las reglas, el estado, el cronómetro, la máquina de estados y la pinza, con pruebas automatizadas de lógica: `node --test tests/logic.test.mjs` (Node 18+, sin npm).
-- La carga de módulos y CDN, y el render de la escena, en Chrome headless.
+**Se debe validar físicamente en el Quest:** las pruebas 3 a 5, 8, 15 y 16, la sensibilidad de la pinza y la sensación del "carrete".
 
-**Se debe validar físicamente en el Quest:** pruebas 5 a 7, 9 a 14 y la sensibilidad de la pinza.
+## 9. Limitaciones conocidas
 
-## 10. Limitaciones conocidas
+- cannon-es no tiene detección continua de colisiones (CCD). Un lanzamiento muy rápido podría atravesar una pared delgada. Se mitiga limitando la velocidad al soltar y recuperando las figuras que escapan.
+- Las manos no tienen colisionador propio: empujan figuras solo cuando las sostienen.
+- La vista previa de escritorio no simula manos; sirve para probar la física y la lógica.
+- Si el CDN de WebXR Input Profiles no responde, no aparecen las mallas de las manos (los rayos sí). Solución: `hands.modelProfile: 'spheres'` en `config.js`.
 
-- El filtro de "palma hacia el usuario" usa la convención de ejes de WebXR Hand Input. Hay que verificarlo en el visor.
-- Si el CDN de WebXR Input Profiles no responde, las mallas de las manos no aparecen, aunque los rayos sí. Solución: `hands.modelProfile: 'spheres'`.
-- La vista previa de escritorio no simula manos; solo sirve para depurar la lógica.
-
-## 11. Créditos y licencias
+## 10. Créditos y licencias
 
 - **Código del proyecto:** © 2026 Melissa Manzano, licencia MIT (ver `LICENSE`).
-- **[Three.js](https://threejs.org/) r170:** MIT. La técnica de apuntar y arrastrar se inspira en el ejemplo oficial `webxr_vr_handinput_pointerdrag`, sin copiar su diseño ni su estructura.
+- **[Three.js](https://threejs.org/) r170:** MIT.
+- **[cannon-es](https://github.com/pmndrs/cannon-es) 0.20.0:** MIT.
 - **[Bootstrap](https://getbootstrap.com/) 5.3.3:** MIT.
-- **Modelos de manos:** [WebXR Input Profiles](https://github.com/immersive-web/webxr-input-profiles), MIT, cargados por `XRHandModelFactory`.
-- **Sonidos:** sintetizados en tiempo de ejecución con Web Audio API (sin archivos de terceros).
+- **Modelos de manos:** [WebXR Input Profiles](https://github.com/immersive-web/webxr-input-profiles), MIT.
+- **Figuras, mesas y recipientes:** geometría generada en código (sin modelos de terceros).
+- **Sonidos:** sintetizados con Web Audio API (sin archivos de terceros).
 - **Desarrollo:** asistido por un agente de IA (Claude) bajo la supervisión de la autora.

@@ -1,30 +1,30 @@
 /**
- * gameMachine.js — Máquina de estados del reto.
+ * gameMachine.js — Máquina de estados del reto de clasificación.
  *
- * Fases:   pendiente ──(primer agarre)──▶ activo ──(5/5)──▶ completado
- *              ▲                                              │
- *              └──────────────── Reiniciar ◀──────────────────┘
+ * Fases:   pendiente ──(primer agarre)──▶ activo ──(20/20)──▶ completado
+ *              ▲                                                │
+ *              └──────────── Reinicio aleatorio ◀───────────────┘
  *
- * Pieza:   disponible ─(pinza)─▶ seleccionada ─(se mueve)─▶ en movimiento
- *              ▲                                              │ (soltar)
- *              └──── error / fuera de zona ◀── validar ──▶ colocada (bloqueada)
+ * Figura:  libre ─(pinza)─▶ en mano ─(abrir dedos)─▶ libre (cae con gravedad)
+ *            ▲                                          │ reposa dentro de un recipiente
+ *            └── recipiente equivocado: error + expulsión ◀── validar ──▶ clasificada (bloqueada)
  *
- * No toca Three.js: los efectos visuales y de sonido se delegan en "hooks".
+ * La validación NO ocurre al soltar: ocurre cuando la física deja la figura en
+ * reposo dentro de un recipiente (ver sortingMonitor.js). Así un rebote que la saca
+ * del bote no cuenta, y una figura lanzada que cae dentro sí cuenta.
+ *
+ * No toca Three.js ni cannon-es: los efectos se delegan en "hooks".
  */
-import { PIECE_STATUS, PHASE, MESSAGE_KIND } from '../core/state.js';
-import { evaluateDrop, validateRuleConfig, DROP_RESULT } from './assemblyRules.js';
+import { OBJECT_STATUS, PHASE, MESSAGE_KIND } from '../core/state.js';
+import { evaluateDeposit, validateSortingConfig, DEPOSIT_RESULT } from '../validation/sortingRules.js';
 import { formatTime } from './timer.js';
 
-const HELD = new Set([PIECE_STATUS.SELECTED, PIECE_STATUS.DRAGGING]);
+export function createGameMachine({ store, classes, bins, perClass, rules, hooks = {}, now = () => performance.now() }) {
+  validateSortingConfig({ classes, bins, perClass });
 
-export function createGameMachine({ store, pieceDefs, targets, rules, hooks = {}, now = () => performance.now() }) {
-  validateRuleConfig(rules);
-  if (!Array.isArray(targets) || targets.length !== pieceDefs.length) {
-    throw new Error('Debe existir exactamente un destino por pieza.');
-  }
-
-  const defs = new Map(pieceDefs.map((d) => [d.id, d]));
-  const labelByTarget = new Map(pieceDefs.map((d) => [d.targetId, d.label]));
+  const classById = new Map(classes.map((c) => [c.id, c]));
+  const binById = new Map(bins.map((b) => [b.id, b]));
+  const binByClass = new Map(bins.map((b) => [b.classId, b]));
 
   function callHook(name, ...args) {
     const fn = hooks[name];
@@ -42,32 +42,46 @@ export function createGameMachine({ store, pieceDefs, targets, rules, hooks = {}
     store.setMessage(text, kind, expiresAt);
   }
 
-  function describe(pieceId) {
-    const def = defs.get(pieceId);
-    return def ? `${def.name} (${def.label})` : pieceId;
-  }
+  const className = (classId) => classById.get(classId)?.name ?? classId;
+  const binName = (binId) => {
+    const bin = binById.get(binId);
+    const cls = bin && classById.get(bin.classId);
+    return cls ? `${cls.label} · ${cls.plural}` : binId;
+  };
 
-  function canGrab(pieceId) {
-    const piece = store.getPiece(pieceId);
+  function canGrab(objectId) {
+    const obj = store.getObject(objectId);
     return store.getState().phase !== PHASE.COMPLETED
-      && piece.status === PIECE_STATUS.AVAILABLE
-      && piece.heldBy === null;
+      && obj.status === OBJECT_STATUS.FREE
+      && obj.heldBy === null;
   }
 
-  function grab(pieceId, sourceId) {
-    if (!canGrab(pieceId)) return false;
+  function grab(objectId, sourceId) {
+    if (!canGrab(objectId)) return false;
     if (store.getState().phase === PHASE.PENDING) store.setPhase(PHASE.ACTIVE);
     store.startTimer(now());
-    store.setPieceStatus(pieceId, PIECE_STATUS.SELECTED, sourceId);
-    notify(`Sostienes: ${describe(pieceId)}. Suéltala en su destino.`, MESSAGE_KIND.INFO);
-    callHook('onGrab', pieceId);
+    store.setObjectStatus(objectId, OBJECT_STATUS.HELD, sourceId);
+    const cls = store.getObject(objectId).classId;
+    const target = binByClass.get(cls);
+    notify(`Sostienes: ${className(cls)}. Llévalo al recipiente ${binName(target.id)}.`, MESSAGE_KIND.INFO);
+    callHook('onGrab', objectId);
     return true;
   }
 
-  function markMoving(pieceId) {
-    const piece = store.getPiece(pieceId);
-    if (piece.status === PIECE_STATUS.SELECTED) {
-      store.setPieceStatus(pieceId, PIECE_STATUS.DRAGGING, piece.heldBy);
+  /** Al abrir los dedos: la figura queda libre y la física decide dónde termina. */
+  function release(objectId) {
+    const obj = store.getObject(objectId);
+    if (obj.status !== OBJECT_STATUS.HELD) return false;
+    store.setObjectStatus(objectId, OBJECT_STATUS.FREE);
+    callHook('onRelease', objectId);
+    return true;
+  }
+
+  /** Libera sin intención del usuario (pérdida de tracking o fin de sesión). */
+  function cancel(objectId, reason) {
+    if (!release(objectId)) return;
+    if (reason === 'tracking-lost') {
+      notify('Se perdió el seguimiento de la mano: la figura cayó por gravedad.', MESSAGE_KIND.WARNING);
     }
   }
 
@@ -75,70 +89,61 @@ export function createGameMachine({ store, pieceDefs, targets, rules, hooks = {}
     const t = now();
     store.pauseTimer(t);
     store.setPhase(PHASE.COMPLETED);
-    const time = formatTime(store.elapsedMs(t));
-    notify(`¡Laboratorio completado! Tiempo: ${time}`, MESSAGE_KIND.SUCCESS, null);
+    const total = formatTime(store.elapsedMs(t));
+    const { errors } = store.getState().stats;
+    notify(`¡Laboratorio completado en ${total}! Errores: ${errors}. Pulsa "Reinicio aleatorio" para otra ronda.`,
+      MESSAGE_KIND.SUCCESS, null);
     callHook('onComplete', store.elapsedMs(t));
   }
 
-  /** Valida al SOLTAR. Devuelve el resultado de evaluateDrop o null si no aplica. */
-  function release(pieceId, position) {
-    const piece = store.getPiece(pieceId);
-    if (!HELD.has(piece.status)) return null;
+  /**
+   * Una figura quedó EN REPOSO dentro de un recipiente. Lo llama sortingMonitor.
+   * @returns {'correct'|'wrong'|null}  null si ya se evaluó ese intento
+   */
+  function deposit(objectId, binId) {
+    const obj = store.getObject(objectId);
+    if (obj.status !== OBJECT_STATUS.FREE) return null;
+    const bin = binById.get(binId);
+    if (!bin) throw new Error(`Recipiente desconocido: ${binId}`);
 
-    const outcome = evaluateDrop({ pieceTargetId: piece.targetId, position, targets, rules });
-    const name = describe(pieceId);
+    // Mismo intento ya evaluado en este recipiente: no se vuelve a contar.
+    // (Si una figura equivocada recae en el mismo bote, solo se vuelve a expulsar.)
+    if (obj.lastBinId === binId) {
+      if (evaluateDeposit(obj.classId, bin) === DEPOSIT_RESULT.WRONG) callHook('onEject', objectId, binId);
+      return null;
+    }
+    if (store.getState().phase === PHASE.COMPLETED) return null;
 
-    switch (outcome.result) {
-      case DROP_RESULT.SUCCESS:
-        store.setPieceStatus(pieceId, PIECE_STATUS.PLACED);
-        callHook('onSuccess', pieceId, outcome.targetId);
-        if (store.placedCount() === store.totalPieces()) {
-          complete();
-        } else {
-          notify(`¡Correcto! ${name} ensamblado. ${store.placedCount()}/${store.totalPieces()}`, MESSAGE_KIND.SUCCESS);
-        }
-        break;
-
-      case DROP_RESULT.WRONG_TARGET:
-        store.setPieceStatus(pieceId, PIECE_STATUS.AVAILABLE);
-        callHook('onError', pieceId, outcome);
-        notify(`Destino incorrecto: ${name} va en el destino ${labelByTarget.get(piece.targetId)}.`, MESSAGE_KIND.ERROR);
-        break;
-
-      case DROP_RESULT.TOO_FAR: {
-        store.setPieceStatus(pieceId, PIECE_STATUS.AVAILABLE);
-        callHook('onError', pieceId, outcome);
-        const cm = (outcome.distance * 100).toFixed(1);
-        const max = (rules.tolerance * 100).toFixed(0);
-        notify(`Casi: quedó a ${cm} cm del centro (máx. ${max} cm). Acércala más.`, MESSAGE_KIND.ERROR);
-        break;
+    const result = evaluateDeposit(obj.classId, bin);
+    if (result === DEPOSIT_RESULT.CORRECT) {
+      const filled = store.recordCorrect(objectId, binId, store.elapsedMs(now()));
+      callHook('onCorrect', objectId, binId);
+      const binState = store.getBin(binId);
+      if (store.sortedCount() === store.totalObjects()) {
+        if (filled) callHook('onBinFilled', binId, binState.completedAtMs);
+        complete();
+      } else if (filled) {
+        callHook('onBinFilled', binId, binState.completedAtMs);
+        notify(`¡Recipiente ${binName(binId)} completo en ${formatTime(binState.completedAtMs)}!`, MESSAGE_KIND.SUCCESS);
+      } else {
+        notify(`¡Correcto! ${className(obj.classId)} en ${binName(binId)} (${binState.count}/${binState.capacity}). Total ${store.sortedCount()}/${store.totalObjects()}`,
+          MESSAGE_KIND.SUCCESS);
       }
-
-      case DROP_RESULT.OUT_OF_ZONE:
-      default:
-        store.setPieceStatus(pieceId, PIECE_STATUS.AVAILABLE);
-        callHook('onReturnHome', pieceId);
-        notify(`${name} no estaba cerca de ningún destino y volvió a su lugar.`, MESSAGE_KIND.INFO);
-        break;
+    } else {
+      store.recordError(objectId, binId);
+      callHook('onWrong', objectId, binId);
+      callHook('onEject', objectId, binId);
+      const target = binByClass.get(obj.classId);
+      notify(`Error: ${className(obj.classId)} no va en ${binName(binId)}. Su recipiente es ${binName(target.id)}.`,
+        MESSAGE_KIND.ERROR);
     }
-    return outcome;
-  }
-
-  /** Libera una pieza SIN validar (pérdida de tracking, fin de sesión). */
-  function cancel(pieceId, reason) {
-    const piece = store.getPiece(pieceId);
-    if (!HELD.has(piece.status)) return;
-    store.setPieceStatus(pieceId, PIECE_STATUS.AVAILABLE);
-    callHook('onReturnHome', pieceId);
-    if (reason === 'tracking-lost') {
-      notify(`Se perdió el seguimiento de la mano. ${describe(pieceId)} volvió a su lugar.`, MESSAGE_KIND.WARNING);
-    }
+    return result;
   }
 
   function reset() {
     store.resetProgress();
     callHook('onReset');
-    notify('Laboratorio reiniciado. Pellizca una pieza para comenzar.', MESSAGE_KIND.INFO);
+    notify('Reinicio aleatorio: las figuras cambiaron de mesa. Pellizca una para comenzar.', MESSAGE_KIND.INFO);
   }
 
   function onSessionStart() {
@@ -150,6 +155,6 @@ export function createGameMachine({ store, pieceDefs, targets, rules, hooks = {}
   }
 
   return Object.freeze({
-    canGrab, grab, markMoving, release, cancel, reset, notify, onSessionStart, onSessionEnd,
+    canGrab, grab, release, cancel, deposit, reset, notify, onSessionStart, onSessionEnd,
   });
 }
