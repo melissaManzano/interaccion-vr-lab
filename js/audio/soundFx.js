@@ -13,6 +13,7 @@ export function createSoundFx({ volume = 0.25 } = {}) {
   let ctx = null;
   let master = null;
   let lastImpactAt = 0;
+  let enabled = true; // preferencia del usuario (interruptor de la portada)
 
   function ensureContext() {
     if (ctx) return ctx;
@@ -26,6 +27,7 @@ export function createSoundFx({ volume = 0.25 } = {}) {
   }
 
   function tone(freq, startOffset, duration, type = 'sine', gain = 1) {
+    if (!enabled) return;
     const c = ensureContext();
     if (!c || c.state !== 'running') return;
     const t0 = c.currentTime + startOffset;
@@ -52,6 +54,7 @@ export function createSoundFx({ volume = 0.25 } = {}) {
   }
 
   return {
+    setEnabled(value) { enabled = Boolean(value); },
     async unlock() {
       try {
         const c = ensureContext();

@@ -1,48 +1,57 @@
 /**
  * state.js — Estado central ÚNICO de la aplicación.
  *
- * Aquí vive todo: figuras (quién sostiene cada una y si ya está clasificada),
- * recipientes (avance y tiempo de llenado), aciertos, errores, fase, cronómetro,
- * sesión XR, manos y mensajes.
+ * Aquí vive todo: figuras, recipientes (avance y tiempo de llenado), aciertos,
+ * errores, intentos, fase, cronómetro, sesión XR, manos y mensajes.
  *
- * Los totales (clasificadas X/20, avance por recipiente) se CALCULAN a partir del
- * estado de las figuras y recipientes, así nunca se duplican ni se desincronizan.
+ * FICHA ÚNICA POR FIGURA (una sola fuente de verdad):
+ *   { id, classId, targetBinId, originTableId, status, heldBy, lastBinId, mesh, body }
+ * - id / classId / targetBinId: identidad, categoría y recipiente asignado.
+ * - originTableId: mesa donde apareció en la distribución actual.
+ * - status / heldBy / lastBinId: estado lógico observable.
+ * - mesh / body: referencias a la malla de Three.js y al cuerpo de cannon-es
+ *   (se enlazan con bindRuntime al crear la escena; este módulo no las usa,
+ *   así sigue siendo comprobable con Node sin Three.js ni cannon-es).
+ *
+ * Los totales (clasificadas X/20, avance por recipiente, intentos) se CALCULAN a
+ * partir del estado, así nunca se duplican ni se desincronizan.
  *
  * Los demás módulos LEEN con getState() y MODIFICAN solo mediante los métodos del store.
- * La posición física de cada figura NO vive aquí: es del motor de física.
  */
 import * as timer from '../logic/timer.js';
 import { accuracy } from '../validation/sortingRules.js';
 
 /**
- * Estados de una figura:
+ * Estados observables de una figura:
  *
- *   disponible ──pinza──▶ sujeta ──abrir dedos──▶ en caída ──reposa fuera──▶ disponible
- *        ▲                  ▲                       │    └──reposa en el suelo──▶ recuperable
- *        │                  └────── pinza ──────────┤
- *        │                                          └──entra a un recipiente──▶ en validación
+ *   disponible ──pinza──▶ sujeta ──abrir dedos──▶ en vuelo ──reposa fuera──▶ disponible
+ *        ▲                  ▲                        │    └──reposa en el suelo──▶ recuperable
+ *        │                  └─────── pinza ──────────┤
+ *        │                                           └──entra a un recipiente──▶ estabilizándose
  *        │                                                 │ quieta 350 ms
- *        │                           recipiente correcto ──┴── recipiente equivocado
- *        │                                  ▼                         ▼
- *        └──── reinicio ◀──────────── clasificada            expulsión → en caída
+ *        │                            recipiente correcto ──┴── recipiente equivocado
+ *        │                                   ▼                         ▼
+ *        └──── reinicio ◀───────────── clasificada            error (expulsión) ──▶ en vuelo
  *
  * Solo "sujeta" y "clasificada" impiden tomarla con otra pinza.
  */
 export const OBJECT_STATUS = Object.freeze({
   AVAILABLE: 'available', // en reposo sobre una mesa o el mostrador
   HELD: 'held', // en una mano (cuerpo cinemático)
-  FALLING: 'falling', // suelta y en movimiento (cuerpo dinámico)
-  VALIDATING: 'validating', // dentro de un recipiente, esperando estabilizarse
+  FLYING: 'flying', // liberada / en vuelo (cuerpo dinámico en movimiento)
+  SETTLING: 'settling', // dentro de un recipiente, estabilizándose
   SORTED: 'sorted', // clasificada correctamente (bloqueada)
+  ERROR: 'error', // depósito equivocado confirmado; el recipiente la expulsa
   RECOVERABLE: 'recoverable', // en reposo en el suelo: se recoge con el rayo
 });
 
 export const OBJECT_STATUS_LABEL = Object.freeze({
   available: 'Disponible',
   held: 'Sujeta',
-  falling: 'En caída',
-  validating: 'En validación',
+  flying: 'Liberada / en vuelo',
+  settling: 'Estabilizándose',
   sorted: 'Clasificada',
+  error: 'Error',
   recoverable: 'Recuperable',
 });
 
@@ -74,7 +83,7 @@ const HAND_SIDES = new Set(['left', 'right']);
 /**
  * @param {object} p
  * @param {Array<{id:string, classId:string}>} p.objects
- * @param {Array<{id:string, classId:string}>} p.bins
+ * @param {Array<{id:string, classId:string}>} p.bins  un recipiente por categoría
  * @param {number} p.capacity  figuras por recipiente (5)
  */
 export function createStore({ objects, bins, capacity }) {
@@ -92,9 +101,21 @@ export function createStore({ objects, bins, capacity }) {
     message: { text: '', kind: MESSAGE_KIND.INFO, expiresAt: null },
   };
 
+  const binOfClass = new Map(bins.map((b) => [b.classId, b.id]));
   for (const o of objects) {
     if (state.objects.has(o.id)) throw new Error(`ID de figura duplicado: ${o.id}`);
-    state.objects.set(o.id, { id: o.id, classId: o.classId, status: OBJECT_STATUS.AVAILABLE, heldBy: null, lastBinId: null });
+    if (!binOfClass.has(o.classId)) throw new Error(`La figura ${o.id} no tiene recipiente para su clase ${o.classId}`);
+    state.objects.set(o.id, {
+      id: o.id,
+      classId: o.classId,
+      targetBinId: binOfClass.get(o.classId),
+      originTableId: null,
+      status: OBJECT_STATUS.AVAILABLE,
+      heldBy: null,
+      lastBinId: null,
+      mesh: null,
+      body: null,
+    });
   }
   for (const b of bins) {
     if (state.bins.has(b.id)) throw new Error(`ID de recipiente duplicado: ${b.id}`);
@@ -145,6 +166,20 @@ export function createStore({ objects, bins, capacity }) {
     getBin,
     sortedCount,
     totalObjects: () => state.objects.size,
+    /** Intentos de clasificación confirmados = aciertos + errores. */
+    attempts: () => state.stats.correct + state.stats.errors,
+
+    /** Enlaza la malla y el cuerpo físico a la ficha de la figura (una vez, al crear la escena). */
+    bindRuntime(id, { mesh, body }) {
+      const obj = getObject(id);
+      obj.mesh = mesh;
+      obj.body = body;
+    },
+
+    /** Mesa de origen en la distribución actual (la fija el reinicio aleatorio). */
+    setOriginTable(id, tableId) {
+      getObject(id).originTableId = tableId;
+    },
     accuracy: () => accuracy(state.stats.correct, state.stats.errors),
 
     setObjectStatus(id, status, heldBy = null) {

@@ -2,10 +2,11 @@
  * sortingMonitor.js — Observa la simulación y mueve cada figura entre sus estados FÍSICOS.
  *
  * Cada cuadro, para cada figura que no está sujeta ni clasificada:
- *   - Dentro del volumen útil de un recipiente → "en validación". Si permanece
+ *   - Dentro del volumen útil de un recipiente → "estabilizándose". Si permanece
  *     settleMs casi quieta (o el motor la durmió), se llama a game.deposit(), que la
- *     clasifica o registra el error y pide expulsarla.
- *   - Fuera de los recipientes y moviéndose → "en caída".
+ *     clasifica o la marca como "error" y pide expulsarla.
+ *   - "Error" dura errorFlashMs (aviso visible + expulsión); después, "en vuelo".
+ *   - Fuera de los recipientes y moviéndose → "liberada / en vuelo".
  *   - Fuera de los recipientes y en reposo → "disponible" (sobre una mesa o el
  *     mostrador) o "recuperable" (en el suelo; se recoge con el rayo).
  *   - Fuera de la sala (debajo del suelo o muy lejos) → vuelve a su lugar en la mesa.
@@ -19,7 +20,7 @@ const EJECT_SLIPPERY_MS = 600;
 const SLEEPING = 2; // CANNON.Body.SLEEPING
 
 export function createSortingMonitor({ objects, bins, store, game, rules, physics }) {
-  const track = new Map(objects.list.map((o) => [o.id, { binMs: 0, restMs: 0, binId: null, ejectMs: 0 }]));
+  const track = new Map(objects.list.map((o) => [o.id, { binMs: 0, restMs: 0, binId: null, ejectMs: 0, errorMs: 0 }]));
   const setStatus = (id, status) => store.setObjectStatus(id, status);
 
   return {
@@ -44,9 +45,16 @@ export function createSortingMonitor({ objects, bins, store, game, rules, physic
         // Recuperación segura: una figura fuera de la sala vuelve a su mesa y cae desde 1 cm.
         if (p.y < rules.respawnBelowY || Math.hypot(p.x, p.z) > rules.respawnRadius) {
           objects.respawn(obj.id);
-          t.binMs = 0; t.restMs = 0; t.binId = null; t.ejectMs = 0;
-          setStatus(obj.id, OBJECT_STATUS.FALLING);
+          t.binMs = 0; t.restMs = 0; t.binId = null; t.ejectMs = 0; t.errorMs = 0;
+          setStatus(obj.id, OBJECT_STATUS.FLYING);
           continue;
+        }
+
+        // "Error" se mantiene mientras dura el aviso; así la expulsión no se reevalúa a medias.
+        if (status === OBJECT_STATUS.ERROR) {
+          t.errorMs -= deltaMs;
+          if (t.errorMs > 0) continue;
+          setStatus(obj.id, OBJECT_STATUS.FLYING);
         }
 
         const sleeping = obj.body.sleepState === SLEEPING;
@@ -56,11 +64,11 @@ export function createSortingMonitor({ objects, bins, store, game, rules, physic
         if (bin) {
           if (t.binId !== bin.id) { t.binMs = 0; t.binId = bin.id; }
           t.restMs = 0;
-          setStatus(obj.id, OBJECT_STATUS.VALIDATING);
+          setStatus(obj.id, OBJECT_STATUS.SETTLING);
           t.binMs = sleeping ? rules.settleMs : accumulateSettle(t.binMs, speed, deltaMs, rules.settleSpeed);
           if (t.binMs >= rules.settleMs) {
             t.binMs = 0;
-            game.deposit(obj.id, bin.id); // → clasificada, o error + expulsión (en caída)
+            game.deposit(obj.id, bin.id); // → clasificada, o error + expulsión
           }
           continue;
         }
@@ -70,7 +78,7 @@ export function createSortingMonitor({ objects, bins, store, game, rules, physic
         if (t.restMs >= rules.settleMs) {
           setStatus(obj.id, p.y < rules.floorZoneY ? OBJECT_STATUS.RECOVERABLE : OBJECT_STATUS.AVAILABLE);
         } else if (speed >= rules.settleSpeed) {
-          setStatus(obj.id, OBJECT_STATUS.FALLING);
+          setStatus(obj.id, OBJECT_STATUS.FLYING);
         }
       }
     },
@@ -89,7 +97,10 @@ export function createSortingMonitor({ objects, bins, store, game, rules, physic
       // no caiga en el recipiente vecino.
       const sideways = bin ? Math.sign(bin.x || 1) * 0.15 : 0;
       physics.setEjecting(body, true);
-      track.get(objectId).ejectMs = EJECT_SLIPPERY_MS;
+      const t = track.get(objectId);
+      t.ejectMs = EJECT_SLIPPERY_MS;
+      t.errorMs = rules.errorFlashMs;
+      t.binMs = 0;
       body.wakeUp();
       body.velocity.set(sideways, rules.ejectUp, rules.ejectForward);
       body.angularVelocity.set(1, 0, 0.5);
@@ -98,7 +109,7 @@ export function createSortingMonitor({ objects, bins, store, game, rules, physic
     reset() {
       for (const [id, t] of track) {
         if (t.ejectMs > 0) physics.setEjecting(objects.get(id).body, false);
-        t.binMs = 0; t.restMs = 0; t.binId = null; t.ejectMs = 0;
+        t.binMs = 0; t.restMs = 0; t.binId = null; t.ejectMs = 0; t.errorMs = 0;
       }
     },
   };

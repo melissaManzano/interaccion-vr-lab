@@ -51,8 +51,8 @@ export function evaluateDeposit(objectClassId, bin) {
 }
 
 /**
- * Precisión = aciertos / (aciertos + errores). Devuelve null si aún no hay intentos
- * (así el marcador muestra "—" en vez de un engañoso 0 %).
+ * Precisión = aciertos / intentos confirmados, con intentos = aciertos + errores.
+ * Devuelve null si aún no hay intentos; el marcador lo muestra como "0 %".
  */
 export function accuracy(correct, errors) {
   const attempts = correct + errors;
@@ -60,9 +60,9 @@ export function accuracy(correct, errors) {
   return correct / attempts;
 }
 
-/** Formatea la precisión como "87 %" o "—". */
+/** Formatea la precisión como "87 %"; sin intentos, "0 %". */
 export function formatAccuracy(value) {
-  return value === null ? '—' : `${Math.round(value * 100)} %`;
+  return value === null ? '0 %' : `${Math.round(value * 100)} %`;
 }
 
 /**

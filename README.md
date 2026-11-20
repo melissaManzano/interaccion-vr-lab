@@ -1,4 +1,4 @@
-# Laboratorio inmersivo de clasificación geométrica
+# 3.2 Interacción virtual — Laboratorio inmersivo de clasificación geométrica
 
 Aplicación web de **realidad virtual inmersiva** para **Meta Quest 3** con **física real**. Veinte figuras geométricas de cuatro clases están repartidas al azar sobre cuatro mesas. Con **seguimiento de manos** y **gesto de pinza**, el usuario las toma y las clasifica en cuatro recipientes 3D abiertos. Gravedad, rebotes, fricción y colisiones las calcula un motor de física; no son animaciones.
 
@@ -37,7 +37,7 @@ En la PC el botón muestra **"VR no disponible aquí"**, y es lo normal. La **Vi
 
 | Acción | Control |
 |---|---|
-| Comenzar la ronda | **Clic** en el botón 3D *Iniciar* |
+| Comenzar la partida | **Clic** en el botón 3D *Comenzar* |
 | Tomar una figura | Mantener **clic izquierdo** sobre ella |
 | Soltarla | Soltar el botón: cae con gravedad |
 | Alejar o acercar la figura sostenida | **Rueda** mientras la sostienes |
@@ -67,7 +67,7 @@ El archivo `.nojekyll` evita que GitHub Pages procese el sitio con Jekyll.
 
 | Acción | Gesto |
 |---|---|
-| Comenzar | Apunta al botón 3D **Iniciar** y cierra la pinza |
+| Comenzar la partida | Apunta al botón 3D **Comenzar** y cierra la pinza |
 | Apuntar | Cada mano proyecta un rayo desde el punto entre el pulgar y el índice |
 | Tomar de cerca | Cierra la pinza **junto a** una figura (a menos de 7 cm) |
 | Tomar a distancia | Apunta con el rayo y cierra la pinza |
@@ -85,7 +85,7 @@ Colores del rayo: **blanco** sin objetivo, **celeste** sobre una figura, **amari
 
 - **4 mesas** con borde bajo: a la izquierda y a la derecha, cerca y lejos.
 - **1 mostrador central** con **4 recipientes abiertos** (27 × 27 × 14 cm).
-- **Marcador 3D** encima del mostrador, con los botones *Reinicio aleatorio*, *Iniciar* (solo antes de comenzar) y *Salir de VR*.
+- **Marcador 3D** encima del mostrador, con los botones *Reinicio aleatorio*, *Comenzar* (solo antes de empezar) y *Salir de VR*.
 - El esquema con medidas, alturas y recorridos seguros de las manos está en [docs/esquema-laboratorio.svg](docs/esquema-laboratorio.svg).
 
 **Clases** (5 figuras de cada una, 20 en total):
@@ -105,16 +105,17 @@ Cada clase se reconoce por **forma, color y letra**. Cada recipiente lleva adem�
 |---|---|---|
 | Disponible | En reposo sobre una mesa | — |
 | Sujeta | En tu mano: el cuerpo pasa a **cinemático** | Azul |
-| En caída | Suelta y moviéndose: el cuerpo vuelve a **dinámico** | — |
-| En validación | Dentro de un recipiente, esperando estabilizarse | — |
-| Clasificada | Aceptada; ya no se puede tomar | Verde |
+| Liberada / en vuelo | Suelta y moviéndose: el cuerpo vuelve a **dinámico** | — |
+| Estabilizándose | Dentro de un recipiente, esperando quedar quieta 350 ms | — |
+| Clasificada | Aceptada por su recipiente; ya no se puede tomar | Verde |
+| Error | Depósito equivocado confirmado: aviso y expulsión (1.2 s) | Rojo |
 | Recuperable | En reposo en el suelo; recógela con el rayo | Ámbar pulsante |
 
-El marcador indica cuántas figuras están en caída, en validación o recuperables.
+El marcador indica cuántas figuras están en vuelo, estabilizándose, con error o recuperables.
 
 ### Reglas
 
-La ronda empieza al pulsar **Iniciar**: antes no se puede tomar nada y el cronómetro está en 00:00.
+La partida empieza al pulsar **Comenzar** dentro del laboratorio, no al cargar la web: antes no se puede tomar nada y el cronómetro está en 00:00.
 
 **Soltar no valida.** La figura cae y la validación ocurre cuando **queda en reposo dentro** de un recipiente (350 ms casi quieta):
 
@@ -129,14 +130,25 @@ La ronda empieza al pulsar **Iniciar**: antes no se puede tomar nada y el cronó
 
 | Indicador | Qué muestra |
 |---|---|
-| Clasificadas | De 0/20 a 20/20 |
+| Aciertos | De 0/20 a 20/20 |
+| Intentos | Depósitos confirmados = aciertos + errores |
 | Por recipiente | De 0/5 a 5/5, en el marcador y en una pantalla detrás de cada recipiente |
 | Errores | Una vez por intento. Si una figura equivocada recae en el mismo recipiente, se expulsa otra vez sin contar otro error |
-| Precisión | Aciertos ÷ (aciertos + errores). Muestra "—" antes del primer intento |
-| Tiempo global | Arranca con *Iniciar*, se pausa fuera de VR y se detiene en 20/20 |
-| Tiempo de llenado | Tiempo desde *Iniciar* hasta que cada recipiente llega a 5/5 |
+| Precisión | Aciertos ÷ intentos × 100. Sin intentos muestra 0 % |
+| Tiempo global | Arranca con *Comenzar*, se pausa fuera de VR y se detiene en 20/20 |
+| Tiempo de cada bote | Segundos desde *Comenzar* hasta que su **quinta** pieza queda validada; antes muestra «pendiente» |
 
-**Reinicio aleatorio.** Vuelve a repartir las 20 figuras entre las mesas, en posiciones y giros nuevos, pone en cero todo lo anterior y regresa a *Pendiente* (botón *Iniciar*).
+Al completar 20/20, el marco del marcador se vuelve verde y aparece el resumen: tiempo total, los cuatro tiempos de los botes, la precisión y los errores.
+
+**Pausa y salida de VR.** Al salir de la sesión (botón *Salir de VR* o menú del sistema):
+
+- el cronómetro se pausa y el progreso se conserva;
+- las figuras sujetas se sueltan y caen;
+- al volver a entrar, el tiempo continúa donde quedó.
+
+Si el usuario recentra la vista del visor, la figura sujeta se suelta para evitar un salto brusco.
+
+**Reinicio aleatorio.** Vuelve a repartir las 20 figuras entre las mesas, en posiciones y giros nuevos, pone en cero todo lo anterior y regresa a *Pendiente* (botón *Comenzar*). También hay un botón **Reiniciar laboratorio** en la portada.
 
 **Recuperación segura:**
 
@@ -145,6 +157,42 @@ La ronda empieza al pulsar **Iniciar**: antes no se puede tomar nada y el cronó
 - Si se pierde el seguimiento de la mano o termina la sesión VR, la figura sujeta se suelta y cae.
 
 Todo se ajusta en [js/config.js](js/config.js) sin tocar la lógica: medidas, masas, fricción, rebote, umbrales de reposo, fuerza de expulsión, etc.
+
+### Cómo cambiar las cuatro figuras
+
+Las clases se definen en `CONFIG.classes` ([js/config.js](js/config.js)) y los recipientes en `CONFIG.bins`. Por ejemplo, para sustituir el cilindro por una **pirámide de base cuadrada**:
+
+1. **Colisionador.** Si la forma no existe en [js/physics/colliders.js](js/physics/colliders.js), agrégala con malla y colisionador de las mismas medidas. Una pirámide se aproxima con un cono de 4 lados:
+
+   ```js
+   pyramid: {
+     description: 'Cylinder(0, r, h, 4): pirámide convexa aproximada',
+     geometry: ({ radius, height }) => new THREE.ConeGeometry(radius, height, 4),
+     shape: ({ radius, height }) => new CANNON.Cylinder(0.001, radius, height, 4),
+     halfHeight: ({ height }) => height / 2,
+     probeRadius: ({ radius, height }) => Math.max(radius * 0.8, height / 2),
+     flatShading: true,
+   },
+   ```
+
+   El radio superior es 0.001 y no 0: así cannon-es no genera vértices repetidos. Antes de entregar, comprueba que la orientación de la malla coincida con la del colisionador.
+
+2. **Clase.** En `CONFIG.classes`, cambia la entrada del cilindro por:
+
+   ```js
+   { id: 'pyramid', label: 'C', name: 'Pirámide', plural: 'Pirámides', color: 0xec407a, colorName: 'rosa',
+     collider: 'pyramid', size: { radius: 0.04, height: 0.065 }, mass: 0.1 },
+   ```
+
+3. **Recipiente.** En `CONFIG.bins`, cambia `classId: 'cylinder'` por `classId: 'pyramid'`.
+
+4. **Comprobación.** Ejecuta `node --test tests/logic.test.mjs`: valida que haya un recipiente por clase y que la figura quepa en él. Después revisa la vista previa.
+
+**Otros parámetros:**
+
+- Piezas por categoría: `CONFIG.perClass` (5).
+- Piezas por mesa: se reparten en partes iguales (20 ÷ 4 = 5). Si cambias el total, ajusta `CONFIG.spawn` (columnas × filas ≥ piezas por mesa).
+- La portada, el marcador y las pantallas de los botes se generan solos a partir de esta configuración.
 
 ## 6. Arquitectura
 
@@ -223,7 +271,7 @@ Los fundamentos de WebXR y del seguimiento de manos siguen en [docs/02-webxr-y-a
 ## 7. Rendimiento y estabilidad
 
 - **Física:**
-  - paso fijo de 1/90 s (máximo 4 subpasos por cuadro), con interpolación para dibujar sin tirones;
+  - paso fijo de 1/90 s (máximo 4 subpasos por cuadro), con interpolación para dibujar sin tirones. El Anexo sugiere un valor cercano a 1/60 s; se eligió 1/90 s porque coincide con el modo de 90 Hz del Quest 3 y reduce el avance por paso (menos riesgo de atravesar paredes de 2 cm). Se cambia en `config.physics.fixedStep`;
   - broadphase SAP y cuerpos que se duermen en reposo;
   - 20 cuerpos dinámicos y 10 estáticos.
 - **Estabilidad:**
@@ -242,30 +290,36 @@ Los fundamentos de WebXR y del seguimiento de manos siguen en [docs/02-webxr-y-a
 
 > No se reportan FPS porque no se han medido en el dispositivo.
 
-## 8. Matriz de pruebas de aceptación
+## 8. Matriz de pruebas de aceptación (Anexo A)
 
-| # | Requisito | Cómo probar | Resultado esperado | Resultado observado | Evidencia |
+**NO PROBADO** significa que la prueba requiere el Meta Quest 3 y no se ha ejecutado allí. Las pruebas de escritorio se hicieron en Chrome headless controlado por DevTools Protocol, con el sitio servido **bajo una subruta** (como en GitHub Pages), y no reportaron errores ni advertencias de consola o red.
+
+| # | Requisito | Procedimiento | Resultado esperado | Resultado observado | Evidencia |
 |---|---|---|---|---|---|
-| 1 | Portada, compatibilidad (incluye cannon-es) | Escritorio y modo dispositivo | Todo visible, checks correctos | ✅ Escritorio (Chrome headless) | |
-| 2 | Sin errores; import map con versiones fijadas | Console y Network | 0 errores; three 0.170.0 y cannon-es 0.20.0 en 200 | ✅ Local (0 errores y 0 advertencias) | |
-| 3 | Despliegue en Pages (HTTPS) | Abrir https://melissamanzano.github.io/interaccion-vr-lab/ | Igual que en local | | |
-| 4 | Sesión VR real y salida | Quest → Entrar a VR → Salir | Fondo virtual, vuelve a la portada | | |
-| 5 | Manos izquierda y derecha | Marcador "Izquierda ✓ Derecha ✓" | Ambas detectadas | | |
-| 6 | 4 mesas, 20 figuras (4 × 5) al azar | Observación y reinicio | 5 por mesa, clases mezcladas | ✅ Escritorio | [01](docs/capturas/01-mesas-y-20-figuras.png) |
-| 7 | Gravedad y reposo | Al cargar | Las figuras caen y se asientan | ✅ Escritorio | [01](docs/capturas/01-mesas-y-20-figuras.png) |
-| 8 | Pinza cercana y a distancia; cinemático al sujetar, dinámico al soltar | Con cada mano | La figura sigue a la mano sin atravesar la mesa | Mouse ✅ (tipo 4 → 1) / Quest pendiente | [02](docs/capturas/02-agarre-cinematico.png) |
-| 9 | Colisiones con mesa, suelo, recipiente y otras figuras | Empujar, soltar sobre el borde, apilar | No atraviesa nada; rebota y rueda | ✅ Escritorio | [05](docs/capturas/05-colisiones-caida.png), [06](docs/capturas/06-colisiones-reposo-y-recuperable.png) |
-| 10 | Acierto | Figura en su recipiente | Verde, sonido, +1, X/5 | ✅ Escritorio | [03](docs/capturas/03-acierto.png) |
-| 11 | Error y expulsión | Figura en otro recipiente | Rojo, +1 error, sale del recipiente | ✅ Escritorio | [04](docs/capturas/04-error-y-expulsion.png) |
-| 12 | Precisión y tiempos de llenado | Llenar los recipientes | 5/5 con tiempo; precisión correcta | ✅ Escritorio | [08](docs/capturas/08-marcador-final.png) |
-| 13 | Inicio, 20/20 y fin | *Iniciar* y completar todo | Cronómetro detenido, mensaje final | ✅ Escritorio | [07](docs/capturas/07-vista-final.png), [08](docs/capturas/08-marcador-final.png) |
-| 14 | Reinicio aleatorio | Botón 3D | 0/20, *Pendiente*, nueva distribución | ✅ Escritorio | |
-| 15 | Salir y reentrar | Botón y menú del sistema | Progreso conservado; figuras en mano caen | | |
-| 16 | Rendimiento y comodidad en el visor | OVR Metrics, uso de 5 min | Fluido y sin mareo | | |
+| 1 | 3.1 ampliada; portada responsiva con favicon y créditos | Abrir la portada en escritorio y con emulación móvil | Título «3.2 Interacción virtual», favicon, créditos y enlace a la 3.1 sin cortes | ✅ Escritorio (1280 px) y móvil emulado (427 px, sin desbordamiento horizontal) | [portada](docs/capturas/09-portada.png), [móvil](docs/capturas/10-portada-movil.png) |
+| 2 | WebXR `immersive-vr` desde GitHub Pages HTTPS en Quest 3 | Abrir la URL en Meta Quest Browser → *Entrar a VR* | Sesión inmersiva con fondo opaco | **NO PROBADO** (requiere el visor). La URL HTTPS responde 200 | — |
+| 3 | Ambas manos; la pinza toma y suelta sin mandos | Mostrar las manos; pellizcar figuras con cada mano | «Izquierda ✓ Derecha ✓»; tomar y soltar | **NO PROBADO** (requiere el visor). Con el mouse el ciclo funciona | — |
+| 4 | Cuatro mesas físicas con cinco piezas cada una | Cargar y contar | 4 × 5 | ✅ 5 por mesa | [01](docs/capturas/01-mesas-y-20-figuras.png) |
+| 5 | 20 piezas: 5 de cada una de 4 figuras | Contar por clase | 5 cubos, 5 esferas, 5 cilindros, 5 prismas | ✅ (también en las pruebas de lógica) | [01](docs/capturas/01-mesas-y-20-figuras.png) |
+| 6 | Reinicio con posiciones distintas, sin solapes ni piezas flotando | 3 reinicios; medir distancias y alturas tras 3 s | Distribuciones distintas, 20 en reposo | ✅ 3 distribuciones distintas; ≥ 12.3 cm entre centros; 20/20 en reposo sobre la mesa | Pruebas de lógica (25 semillas) |
+| 7 | Cuatro botes abiertos y rotulados con base y paredes con colisión | Observar; soltar figuras dentro y sobre el borde | Las figuras entran por la boca y chocan con paredes y base | ✅ | [03](docs/capturas/03-acierto.png), [07](docs/capturas/07-vista-final.png) |
+| 8 | Caída, rebote y reposo sobre mesa o piso | Soltar cilindros desde 25–61 cm; expulsar una esfera al piso | Rebotan y se detienen | ✅ Mesa y piso | [05](docs/capturas/05-colisiones-caida.png), [06](docs/capturas/06-colisiones-reposo-y-recuperable.png) |
+| 9 | Las piezas chocan entre sí y no atraviesan botes | Caídas sobre otras figuras; llenar los 4 botes | Sin interpenetraciones | ✅ | [05](docs/capturas/05-colisiones-caida.png), [07](docs/capturas/07-vista-final.png) |
+| 10 | Al agarrar y soltar se recupera la física dinámica | Tomar y soltar; leer `body.type` | Cinemático (4) al sujetar, dinámico (1) al soltar | ✅ Con el mouse (4 → 1; empujada contra la mesa no la atraviesa). Con las manos: **NO PROBADO** | [02](docs/capturas/02-agarre-cinematico.png) |
+| 11 | Solo una pieza estabilizada en el bote correcto suma, sin dobles registros | Depositar; repetir la evaluación | +1 una sola vez | ✅ Navegador + pruebas de lógica | [03](docs/capturas/03-acierto.png) |
+| 12 | ≥ 3 depósitos erróneos con aviso y error, sin sumar aciertos | Esfera → cubos, cilindro → esferas, prisma → cilindros | 3 errores, aciertos sin cambio | ✅ 3 errores, las 3 en estado *error*, aciertos sin cambio, intentos 4, precisión 25 % | [04](docs/capturas/04-error-y-expulsion.png) |
+| 13 | Una pieza caída al suelo se recupera | Tomar la esfera *recuperable* del suelo | Se puede tomar y levantar | ✅ *recuperable* → *sujeta* → levantada a 0.24 m → *en vuelo* | — |
+| 14 | Panel 0/20 → 20/20 y cuatro 0/5 → 5/5 | Completar la partida | Contadores correctos | ✅ | [01](docs/capturas/01-mesas-y-20-figuras.png), [08](docs/capturas/08-marcador-final.png) |
+| 15 | Cuatro tiempos de llenado, tiempo global, intentos, precisión y errores con fórmulas verificadas | Completar con 3 errores | Precisión = 20/23 = 87 % | ✅ Tiempos de 47.0, 54.2, 60.1 y 67.8 s; total 01:07.8; 23 intentos; 87 % | [08](docs/capturas/08-marcador-final.png) |
+| 16 | El cronómetro se detiene al completar 20 | Esperar tras 20/20 | El tiempo no avanza | ✅ | [08](docs/capturas/08-marcador-final.png) |
+| 17 | Reiniciar restablece la puntuación y genera otro escenario | Botón *Reiniciar laboratorio* (portada) o *Reinicio aleatorio* (3D) | 0/20, 0 intentos, 00:00, distribución nueva | ✅ | — |
+| 18 | VR y carga web sin errores críticos | Console y Network | 0 errores | Web ✅ (local en subruta y GitHub Pages). VR **NO PROBADO** | — |
+| 19 | URL de GitHub y de GitHub Pages públicas | Abrir sin sesión iniciada | HTTP 200 | ✅ Repositorio y sitio responden 200 | — |
+| 20 | Dos problemas reales y conclusiones en la plataforma | Redactar | Texto propio de la alumna | **PENDIENTE (alumna)**. Material de apoyo en [docs/06](docs/06-etapas-y-pruebas.md#problemas-reales-material-para-tus-conclusiones) | — |
 
-**Pruebas automatizadas:** `node --test tests/logic.test.mjs` (Node 18+, sin npm) da **33/33**.
+**Pruebas automatizadas:** `node --test tests/logic.test.mjs` (Node 18+, sin npm) da **35/35**.
 
-**Se debe validar físicamente en el Quest:** las pruebas 3 a 5, 8, 15 y 16, la sensibilidad de la pinza y la sensación del "carrete".
+**Bitácora:** las siete etapas de trabajo (archivos, riesgos, decisiones, comprobación y fallas abiertas) están en [docs/06-etapas-y-pruebas.md](docs/06-etapas-y-pruebas.md).
 
 ## 9. Limitaciones conocidas
 

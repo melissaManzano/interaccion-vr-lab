@@ -1,4 +1,4 @@
-# 5. Diseño de la actividad, conceptos de física y evidencias (práctica 3.2)
+# 5. Diseño de la actividad, conceptos de física y evidencias (3.2 Interacción virtual)
 
 Este documento sigue el orden de la guía de la práctica. Los detalles de implementación (motor, colisionadores, agarre, validación) están en [04-fisica-y-clasificacion.md](04-fisica-y-clasificacion.md).
 
@@ -29,7 +29,7 @@ La práctica 3.1 ([laboratorio-vr-ensamblaje](https://github.com/melissaManzano/
 | [interaction/dragController.js](../js/interaction/dragController.js) | **Arrastre** a lo largo del rayo con offset | Ya no mueve la malla: calcula un **objetivo** para la física; se añade el "carrete" |
 | [interaction/interactionManager.js](../js/interaction/interactionManager.js) | Une fuentes (manos o mouse), raycast, botones y juego | Pasa el cuerpo a cinemático y de vuelta a dinámico |
 | ui/vrPanel.js | **HUD** 3D | Reemplazado por [ui/scoreboard.js](../js/ui/scoreboard.js), con la misma técnica (canvas → textura, redibujo por firma) |
-| [ui/vrButtons.js](../js/ui/vrButtons.js) | Botones 3D con antirrebote | Se añade el botón *Iniciar* y la visibilidad por fase |
+| [ui/vrButtons.js](../js/ui/vrButtons.js) | Botones 3D con antirrebote | Se añade el botón *Comenzar* y la visibilidad por fase |
 | [ui/landingUI.js](../js/ui/landingUI.js), `index.html`, favicon, `.nojekyll`, rutas relativas | Portada Bootstrap y **publicación** | Ampliados (clases, resumen y check de cannon-es) |
 | audio, canvasText, bootGuard, debug | Soporte | Se reutilizan; se añaden sonidos de impacto y de recipiente lleno |
 
@@ -90,7 +90,8 @@ El ejemplo usa sus propios modelos de puntero y organiza los objetos arrastrable
 
 | Captura | Muestra |
 |---|---|
-| [01-mesas-y-20-figuras.png](capturas/01-mesas-y-20-figuras.png) | 4 mesas, 20 figuras mezcladas, 4 recipientes, marcador en *Pendiente* y botón *Iniciar* |
+| [01-mesas-y-20-figuras.png](capturas/01-mesas-y-20-figuras.png) | 4 mesas, 20 figuras mezcladas, 4 recipientes, marcador en *Pendiente* y botón *Comenzar* |
+| [09-portada.png](capturas/09-portada.png), [10-portada-movil.png](capturas/10-portada-movil.png) | Portada «3.2 Interacción virtual» en escritorio y móvil |
 | [02-agarre-cinematico.png](capturas/02-agarre-cinematico.png) | Figura sujeta (resaltada en azul) empujada contra su mesa sin atravesarla |
 | [03-acierto.png](capturas/03-acierto.png) | Acierto: destello verde, recipiente 1/5 |
 | [04-error-y-expulsion.png](capturas/04-error-y-expulsion.png) | Error: borde rojo y esfera expulsada en el aire |
@@ -134,6 +135,7 @@ La pantalla del Quest dibuja a 72–120 Hz y el tiempo entre cuadros varía. Si 
 
 ```js
 // physicsWorld.js — cannon-es acumula el tiempo real y ejecuta pasos de exactamente 1/90 s
+// (el Anexo sugiere ~1/60 s; se justifica 1/90 s en docs/04, sección 2)
 world.step(1 / 90, deltaSeconds, 4);   // máximo 4 subpasos por cuadro
 
 // objectFactory.js — cada cuadro, la malla copia la pose INTERPOLADA del cuerpo
@@ -164,7 +166,7 @@ Verificado en la vista previa (ver [04, sección 10](04-fisica-y-clasificacion.m
 | 20 figuras en 4 mesas; gravedad, rebote y colisiones sin interpenetrar | ✅ | Confirmar a escala real |
 | Agarre → cinemático → soltar → dinámico | ✅ con el mouse | ✅ con las **manos** |
 | Acierto, error, expulsión, precisión, tiempos de llenado, 20/20, reinicio | ✅ | Confirmar |
-| Botones 3D *Iniciar*, *Reinicio aleatorio* | ✅ con el mouse | ✅ con la pinza |
+| Botones 3D *Comenzar*, *Reinicio aleatorio* | ✅ con el mouse | ✅ con la pinza |
 | Sesión `immersive-vr`, *Salir de VR*, salida por el menú del sistema | ❌ (el navegador de escritorio no tiene visor) | ✅ |
 | Seguimiento de ambas manos, pinza, gesto del sistema, pérdida de tracking | ❌ | ✅ |
 | Agarre cercano y "carrete" con el brazo | ❌ (el mouse usa la rueda en su lugar) | ✅ |

@@ -25,7 +25,7 @@ import { generateLayout } from './objects/layoutGenerator.js';
 import { buildBinVolumes, formatAccuracy } from './validation/sortingRules.js';
 import { createSortingMonitor } from './validation/sortingMonitor.js';
 import { createGameMachine } from './logic/gameMachine.js';
-import { formatTime } from './logic/timer.js';
+import { formatTime, formatSeconds } from './logic/timer.js';
 import { createSelectableRegistry, CATEGORY } from './interaction/selectables.js';
 import { createDragController } from './interaction/dragController.js';
 import { createInteractionManager } from './interaction/interactionManager.js';
@@ -75,12 +75,15 @@ async function main() {
 
   // --- Estado, validación y reglas ----------------------------------------------------
   const store = createStore({ objects: objects.list, bins: CONFIG.bins, capacity: CONFIG.perClass });
+  // Ficha única: la malla y el cuerpo físico quedan enlazados a la ficha lógica de cada figura.
+  objects.list.forEach((o) => store.bindRuntime(o.id, { mesh: o.mesh, body: o.body }));
   const binVolumes = buildBinVolumes(CONFIG);
   let monitor = null; // se crea tras el juego (se necesitan mutuamente a través de hooks)
 
   function randomizeLayout() {
     const layout = generateLayout({ objects: objects.list, tables: CONFIG.tables, spawn: CONFIG.spawn });
     objects.applyLayout(layout);
+    for (const [id, slot] of layout) store.setOriginTable(id, slot.tableId);
     monitor?.reset();
     lab.resetVisuals();
   }
@@ -116,7 +119,7 @@ async function main() {
 
   // --- Marcador, pantallas de recipientes y botones 3D -----------------------------------
   const scoreboard = createScoreboard({
-    parent: scene, store, classes: CONFIG.classes, bins: CONFIG.bins, title: CONFIG.app.title,
+    parent: scene, store, classes: CONFIG.classes, bins: CONFIG.bins, title: CONFIG.app.title, subtitle: CONFIG.app.subtitle,
     position: CONFIG.scoreboard.position, width: CONFIG.scoreboard.width,
   });
   const binDisplays = createBinDisplays({
@@ -174,9 +177,19 @@ async function main() {
   renderer.domElement.addEventListener('pointerdown', () => sound.unlock(), { once: true });
 
   // --- Sesión immersive-vr ----------------------------------------------------------
+  /**
+   * Cambio de referencia espacial: si el usuario recentra la vista (botón Meta), el
+   * espacio 'local-floor' emite 'reset' y la mano "salta" respecto del mundo. Para no
+   * lanzar la figura sujeta con una velocidad enorme, se suelta antes.
+   */
+  let referenceSpace = null;
+  const onReferenceReset = () => interaction.cancelAll('reference-reset');
+
   xr = createXrSessionController({
     renderer,
     onStart(session) {
+      referenceSpace = renderer.xr.getReferenceSpace();
+      referenceSpace?.addEventListener?.('reset', onReferenceReset);
       preview.setEnabled(false);
       store.setXrPresenting(true);
       game.onSessionStart();
@@ -189,6 +202,8 @@ async function main() {
       }
     },
     onEnd() {
+      referenceSpace?.removeEventListener?.('reset', onReferenceReset);
+      referenceSpace = null;
       interaction.cancelAll('session-end');
       hands.resetAll();
       game.onSessionEnd();
@@ -203,6 +218,13 @@ async function main() {
       ui.showError(describeXrError(err));
       ui.setEnterState({ enabled: true, label: 'Entrar a VR' });
     },
+  });
+
+  ui.bindSoundPreference((on) => sound.setEnabled(on));
+  ui.onResetClick(() => {
+    interaction.abortAll();
+    game.reset();
+    ui.setStatus('Laboratorio reiniciado con una nueva distribución. Pulsa "Comenzar" dentro del laboratorio.');
   });
 
   ui.onEnterClick(async () => {
@@ -267,12 +289,13 @@ async function main() {
       ui.renderSummary({
         progress: `${store.sortedCount()}/${store.totalObjects()}`,
         errors: String(state.stats.errors),
+        attempts: String(store.attempts()),
         accuracy: formatAccuracy(store.accuracy()),
         phase: PHASE_LABEL[state.phase],
         time: formatTime(store.elapsedMs(t), false),
         bins: CONFIG.bins.map((b) => {
           const s = store.getBin(b.id);
-          return { id: b.id, count: s.count, capacity: s.capacity, time: s.completedAtMs === null ? null : formatTime(s.completedAtMs) };
+          return { id: b.id, count: s.count, capacity: s.capacity, time: s.completedAtMs === null ? null : formatSeconds(s.completedAtMs) };
         }),
       });
     }

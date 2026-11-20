@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Laboratorio VR de Clasificación</title>
+  <title>3.2 Interacción virtual · Laboratorio VR</title>
   <meta name="description" content="Laboratorio inmersivo de clasificación geométrica con gravedad y colisiones para Meta Quest 3, con seguimiento de manos. Three.js + WebXR + cannon-es.">
   <meta name="author" content="Melissa Manzano">
   <meta name="theme-color" content="#0b1220">
-  <meta property="og:title" content="Laboratorio VR de Clasificación Geométrica">
+  <meta property="og:title" content="3.2 Interacción virtual · Laboratorio VR de clasificación">
   <meta property="og:description" content="Toma con tus manos veinte figuras físicas y clasifícalas en cuatro recipientes en Meta Quest 3.">
   <meta property="og:type" content="website">
 
@@ -60,11 +60,12 @@
       <div class="row g-4 align-items-center">
         <div class="col-lg-7">
           <p class="text-info fw-semibold text-uppercase small mb-2">Meta Quest 3 · Three.js · WebXR · cannon-es</p>
-          <h1 class="display-5 fw-bold mb-3">Laboratorio inmersivo de clasificación geométrica</h1>
+          <h1 class="display-5 fw-bold mb-1">3.2 Interacción virtual</h1>
+          <p class="h4 fw-semibold text-body-secondary mb-3">Laboratorio inmersivo de clasificación geométrica</p>
           <p class="lead text-body-secondary mb-4">
             Veinte figuras <strong>con física real</strong> (gravedad, rebotes, fricción y colisiones)
             están repartidas al azar sobre cuatro mesas. Tómalas con <strong>tus manos</strong> y
-            clasifícalas en sus cuatro recipientes abiertos. El cronómetro corre desde que pulsas <em>Iniciar</em>.
+            clasifícalas en sus cuatro recipientes abiertos. El cronómetro corre desde que pulsas <em>Comenzar</em> dentro del laboratorio.
           </p>
           <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
             <button id="btn-enter-vr" type="button" class="btn btn-info btn-lg px-4 fw-semibold" disabled aria-busy="true">
@@ -72,7 +73,16 @@
               <span id="btn-enter-label">Cargando…</span>
             </button>
             <a class="btn btn-outline-light btn-lg" href="#instrucciones">Cómo se juega</a>
+            <button id="btn-reset" type="button" class="btn btn-outline-warning btn-lg">Reiniciar laboratorio</button>
           </div>
+          <div class="form-check form-switch mb-3">
+            <input class="form-check-input" type="checkbox" role="switch" id="pref-sound" checked>
+            <label class="form-check-label small" for="pref-sound">Sonidos de retroalimentación (preferencia guardada en este navegador)</label>
+          </div>
+          <p class="small text-body-secondary mb-2">
+            Amplía la práctica 3.1 ·
+            <a class="link-info" href="https://github.com/melissaManzano/laboratorio-vr-ensamblaje">Laboratorio VR de ensamblaje 3D (repositorio)</a>
+          </p>
           <p id="xr-status" class="small text-body-secondary mb-0" role="status" aria-live="polite">
             Cargando Three.js y comprobando compatibilidad…
           </p>
@@ -132,7 +142,7 @@
           <div class="card h-100 step-card"><div class="card-body">
             <span class="step-number" aria-hidden="true">1</span>
             <h3 class="h6 fw-bold">Entra a VR</h3>
-            <p class="small text-body-secondary mb-0">Deja los mandos, pulsa <em>Entrar a VR</em>, muestra tus manos y pellizca el botón 3D <em>Iniciar</em>.</p>
+            <p class="small text-body-secondary mb-0">Deja los mandos, pulsa <em>Entrar a VR</em>, muestra tus manos y pellizca el botón 3D <em>Comenzar</em>.</p>
           </div></div>
         </li>
         <li class="col-sm-6 col-lg-3">
@@ -183,9 +193,10 @@
         <div class="card glass-card">
           <div class="card-body">
             <dl class="row mb-0 summary">
-              <dt class="col-5">Clasificadas</dt><dd id="summary-progress" class="col-7">0/20</dd>
+              <dt class="col-5">Aciertos</dt><dd id="summary-progress" class="col-7">0/20</dd>
+              <dt class="col-5">Intentos</dt><dd id="summary-attempts" class="col-7">0</dd>
               <dt class="col-5">Errores</dt><dd id="summary-errors" class="col-7">0</dd>
-              <dt class="col-5">Precisión</dt><dd id="summary-accuracy" class="col-7">—</dd>
+              <dt class="col-5">Precisión</dt><dd id="summary-accuracy" class="col-7">0 %</dd>
               <dt class="col-5">Estado</dt><dd id="summary-phase" class="col-7">Pendiente</dd>
               <dt class="col-5">Tiempo</dt><dd id="summary-time" class="col-7">00:00</dd>
             </dl>
@@ -205,8 +216,8 @@
 
     <section class="mb-5" aria-labelledby="preview-title">
       <div class="d-flex flex-wrap justify-content-between align-items-end gap-2 mb-3">
-        <h2 id="preview-title" class="h3 fw-bold mb-0">Vista previa de depuración</h2>
-        <span class="badge text-bg-secondary">Solo para escritorio · no sustituye la VR</span>
+        <h2 id="preview-title" class="h3 fw-bold mb-0">Vista previa de depuración (NO inmersiva)</h2>
+        <span class="badge text-bg-warning">Solo para inspeccionar la física · las manos se prueban en Meta Quest 3</span>
       </div>
       <div id="preview-container" class="preview-container rounded-4 border border-secondary-subtle"></div>
       <p class="small text-body-secondary mt-2 mb-0">
@@ -265,7 +276,9 @@
   <footer class="border-top border-secondary-subtle py-4">
     <div class="container d-flex flex-column flex-md-row justify-content-between gap-2 small text-body-secondary">
       <p class="mb-0">
-        Desarrollado por <strong class="text-body">Melissa Manzano</strong> · Desarrollo de Ambientes Virtuales · 2026
+        Desarrollado por <strong class="text-body">Melissa Manzano</strong> · Desarrollo de Ambientes Virtuales · 3.2 Interacción virtual · 2026<br>
+        Proyecto previo: <a href="https://github.com/melissaManzano/laboratorio-vr-ensamblaje" class="link-info">3.1 Laboratorio VR de ensamblaje 3D</a> ·
+        <a href="https://github.com/melissaManzano/interaccion-vr-lab" class="link-info">Repositorio 3.2</a>
       </p>
       <p class="mb-0">
         Hecho con <a href="https://threejs.org/" class="link-info">Three.js</a> r170 (MIT),

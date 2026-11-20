@@ -1,12 +1,12 @@
 /**
  * gameMachine.js — Máquina de estados del reto de clasificación.
  *
- * Fases:   pendiente ──(botón Iniciar)──▶ activo ──(20/20)──▶ completado
+ * Fases:   pendiente ──(botón Comenzar)──▶ activo ──(20/20)──▶ completado
  *              ▲                                                 │
  *              └──────────── Reinicio aleatorio ◀────────────────┘
  *
- * Los estados de cada figura (disponible, sujeta, en caída, en validación,
- * clasificada, recuperable) están descritos en core/state.js.
+ * Los estados de cada figura (disponible, sujeta, en vuelo, estabilizándose,
+ * clasificada, error, recuperable) están descritos en core/state.js.
  *
  * La validación NO ocurre al soltar: ocurre cuando la física deja la figura en
  * reposo dentro de un recipiente (ver sortingMonitor.js). Así un rebote que la saca
@@ -15,8 +15,8 @@
  * No toca Three.js ni cannon-es: los efectos se delegan en "hooks".
  */
 import { OBJECT_STATUS, PHASE, MESSAGE_KIND } from '../core/state.js';
-import { evaluateDeposit, validateSortingConfig, DEPOSIT_RESULT } from '../validation/sortingRules.js';
-import { formatTime } from './timer.js';
+import { evaluateDeposit, validateSortingConfig, formatAccuracy, DEPOSIT_RESULT } from '../validation/sortingRules.js';
+import { formatTime, formatSeconds } from './timer.js';
 
 export function createGameMachine({ store, classes, bins, perClass, rules, hooks = {}, now = () => performance.now() }) {
   validateSortingConfig({ classes, bins, perClass });
@@ -49,10 +49,11 @@ export function createGameMachine({ store, classes, bins, perClass, rules, hooks
   };
 
   const GRABBABLE = new Set([
-    OBJECT_STATUS.AVAILABLE, OBJECT_STATUS.FALLING, OBJECT_STATUS.VALIDATING, OBJECT_STATUS.RECOVERABLE,
+    OBJECT_STATUS.AVAILABLE, OBJECT_STATUS.FLYING, OBJECT_STATUS.SETTLING, OBJECT_STATUS.ERROR,
+    OBJECT_STATUS.RECOVERABLE,
   ]);
 
-  /** Solo se juega en fase ACTIVA: antes hay que pulsar "Iniciar". */
+  /** Solo se juega en fase ACTIVA: antes hay que pulsar "Comenzar". */
   function canGrab(objectId) {
     const obj = store.getObject(objectId);
     return store.getState().phase === PHASE.ACTIVE
@@ -60,7 +61,7 @@ export function createGameMachine({ store, classes, bins, perClass, rules, hooks
       && obj.heldBy === null;
   }
 
-  /** Inicio explícito (botón 3D "Iniciar"): arranca el cronómetro. */
+  /** Inicio explícito (botón 3D "Comenzar"): arranca el cronómetro. */
   function start() {
     if (store.getState().phase !== PHASE.PENDING) return false;
     store.setPhase(PHASE.ACTIVE);
@@ -84,7 +85,7 @@ export function createGameMachine({ store, classes, bins, perClass, rules, hooks
   function release(objectId) {
     const obj = store.getObject(objectId);
     if (obj.status !== OBJECT_STATUS.HELD) return false;
-    store.setObjectStatus(objectId, OBJECT_STATUS.FALLING);
+    store.setObjectStatus(objectId, OBJECT_STATUS.FLYING);
     callHook('onRelease', objectId);
     return true;
   }
@@ -94,6 +95,8 @@ export function createGameMachine({ store, classes, bins, perClass, rules, hooks
     if (!release(objectId)) return;
     if (reason === 'tracking-lost') {
       notify('Se perdió el seguimiento de la mano: la figura se soltó y cayó por gravedad.', MESSAGE_KIND.WARNING);
+    } else if (reason === 'reference-reset') {
+      notify('Se recentró la vista del visor: la figura se soltó para evitar un salto brusco.', MESSAGE_KIND.WARNING);
     }
   }
 
@@ -103,7 +106,8 @@ export function createGameMachine({ store, classes, bins, perClass, rules, hooks
     store.setPhase(PHASE.COMPLETED);
     const total = formatTime(store.elapsedMs(t));
     const { errors } = store.getState().stats;
-    notify(`¡Laboratorio completado en ${total}! Errores: ${errors}. Pulsa "Reinicio aleatorio" para otra ronda.`,
+    const times = bins.map((b) => `${classById.get(b.classId).label} ${formatSeconds(store.getBin(b.id).completedAtMs)}`).join(' · ');
+    notify(`¡Completado en ${total}! ${times} · Precisión ${formatAccuracy(store.accuracy())} · Errores ${errors}`,
       MESSAGE_KIND.SUCCESS, null);
     callHook('onComplete', store.elapsedMs(t));
   }
@@ -122,7 +126,7 @@ export function createGameMachine({ store, classes, bins, perClass, rules, hooks
     // (Si una figura equivocada recae en el mismo bote, solo se vuelve a expulsar.)
     if (obj.lastBinId === binId) {
       if (evaluateDeposit(obj.classId, bin) === DEPOSIT_RESULT.WRONG) {
-        store.setObjectStatus(objectId, OBJECT_STATUS.FALLING);
+        store.setObjectStatus(objectId, OBJECT_STATUS.ERROR); // se expulsa otra vez, SIN otro error
         callHook('onEject', objectId, binId);
       }
       return null;
@@ -139,14 +143,14 @@ export function createGameMachine({ store, classes, bins, perClass, rules, hooks
         complete();
       } else if (filled) {
         callHook('onBinFilled', binId, binState.completedAtMs);
-        notify(`¡Recipiente ${binName(binId)} completo en ${formatTime(binState.completedAtMs)}!`, MESSAGE_KIND.SUCCESS);
+        notify(`¡Recipiente ${binName(binId)} completo a los ${formatSeconds(binState.completedAtMs)}!`, MESSAGE_KIND.SUCCESS);
       } else {
         notify(`¡Correcto! ${className(obj.classId)} en ${binName(binId)} (${binState.count}/${binState.capacity}). Total ${store.sortedCount()}/${store.totalObjects()}`,
           MESSAGE_KIND.SUCCESS);
       }
     } else {
       store.recordError(objectId, binId);
-      store.setObjectStatus(objectId, OBJECT_STATUS.FALLING); // la expulsión la pone en movimiento
+      store.setObjectStatus(objectId, OBJECT_STATUS.ERROR); // aviso + expulsión; luego pasa a "en vuelo"
       callHook('onWrong', objectId, binId);
       callHook('onEject', objectId, binId);
       const target = binByClass.get(obj.classId);
@@ -159,7 +163,7 @@ export function createGameMachine({ store, classes, bins, perClass, rules, hooks
   function reset() {
     store.resetProgress();
     callHook('onReset');
-    notify('Reinicio aleatorio: nueva distribución. Pulsa "Iniciar" para comenzar.', MESSAGE_KIND.INFO);
+    notify('Reinicio aleatorio: nueva distribución. Pulsa "Comenzar" para jugar.', MESSAGE_KIND.INFO);
   }
 
   function onSessionStart() {

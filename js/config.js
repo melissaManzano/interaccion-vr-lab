@@ -23,7 +23,8 @@ function deepFreeze(value) {
 
 export const CONFIG = deepFreeze({
   app: {
-    title: 'Laboratorio de clasificación geométrica',
+    title: '3.2 Interacción virtual',
+    subtitle: 'Laboratorio de clasificación geométrica',
     author: 'Melissa Manzano',
     course: 'Desarrollo de Ambientes Virtuales · 3.2 Interacción virtual',
   },
@@ -199,7 +200,7 @@ export const CONFIG = deepFreeze({
 
   buttons: [
     { id: 'reset', label: 'Reinicio aleatorio', color: 0x2563eb, position: [-0.36, 1.06, -1.28] },
-    { id: 'start', label: 'Iniciar', color: 0x0d9488, position: [0, 1.06, -1.28] }, // visible solo en "Pendiente"
+    { id: 'start', label: 'Comenzar', color: 0x0d9488, position: [0, 1.06, -1.28] }, // visible solo en "Pendiente"
     { id: 'exit', label: 'Salir de VR', color: 0xb91c1c, position: [0.36, 1.06, -1.28] },
   ],
 

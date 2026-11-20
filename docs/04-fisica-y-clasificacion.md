@@ -1,4 +1,4 @@
-# 4. Física, clasificación y marcador (práctica 3.2)
+# 4. Física, clasificación y marcador (práctica 3.2 Interacción virtual)
 
 Documento técnico de la ampliación **3.2 Interacción virtual**. Explica la elección del motor de física, las versiones fijadas y el import map, los colisionadores de cada figura, cómo se sostiene una figura sin romper la física, cómo se validan aciertos y errores, y qué se verificó.
 
@@ -25,6 +25,19 @@ La práctica 3.1 (sesión WebXR, seguimiento de manos, pinza) sigue documentada 
 - Con 20 cuerpos dinámicos y 10 estáticos, su costo por cuadro es muy bajo en el Quest 3.
 
 **Desventaja conocida:** es menos preciso que Rapier con objetos muy rápidos (no tiene CCD). Se mitiga con paso fijo de 1/90 s, paredes de 2 cm, una velocidad máxima al sostener (5 m/s) y otra al soltar (3.5 m/s). Además, cualquier figura que escape de la sala se recupera.
+
+**Paso fijo: 1/90 s en lugar de 1/60 s.** El Anexo sugiere un paso cercano a 1/60 s con acumulación; aquí se usa acumulación con 1/90 s (11.1 ms) por dos razones:
+
+- coincide con el modo de 90 Hz del Quest 3;
+- a 3.5 m/s una figura avanza 3.9 cm por paso, en lugar de 5.8 cm a 1/60 s, frente a paredes de 2 cm.
+
+Con 20 cuerpos, el costo extra es despreciable. Se cambia en `config.physics.fixedStep`.
+
+**Referencias consultadas:**
+
+- [Ejemplo `webxr_vr_handinput_pointerdrag` de Three.js](https://threejs.org/examples/?q=vr#webxr_vr_handinput_pointerdrag);
+- [Meta: WebXR Hands](https://developers.meta.com/vr/documentation/web/webxr-hands/);
+- [Documentación de cannon-es](https://pmndrs.github.io/cannon-es/).
 
 ## 2. Versiones fijadas e import map
 
@@ -145,7 +158,11 @@ v = (objetivo − posición) × 18   (máximo 5 m/s)
 
 | Situación | Respuesta |
 |---|---|
-| Pérdida de seguimiento > 10 cuadros | Se suelta la figura (→ dinámica, en caída) y se avisa en el marcador |
+| Pérdida de seguimiento > 10 cuadros | Se suelta la figura (→ dinámica, en vuelo) y se avisa en el marcador |
+| Cambio de referencia espacial (el usuario recentra la vista: evento `reset` de `local-floor`) | Se suelta la figura sujeta antes de que el salto de la mano la lance a gran velocidad, y se avisa |
+| Doble agarre accidental (las dos manos sobre la misma figura) | `canGrab` solo acepta figuras sin dueño: la segunda pinza no toma nada |
+| Velocidades extremas | Límite de 5 m/s al sostener y de 3.5 m/s al soltar (promedio de 66 ms, que filtra los picos del tracking) |
+| Liberación fuera de límites | El objetivo de la mano se limita a un volumen de la sala; si aun así la figura sale, vuelve a su mesa |
 | La sesión VR termina (botón o menú del sistema) | Se sueltan todas las figuras sujetas y se pausa el cronómetro; el progreso se conserva |
 | Figura en reposo en el suelo | Estado *recuperable*: brillo ámbar pulsante; se recoge con el rayo |
 | Figura fuera de la sala (y < −0.5 m o a más de 3.2 m) | Vuelve a su lugar en la mesa y cae desde 1 cm |
@@ -159,14 +176,33 @@ v = (objetivo − posición) × 18   (máximo 5 m/s)
 |---|---|---|
 | Disponible | En reposo sobre una mesa o el mostrador | Sí |
 | Sujeta | En una mano (cuerpo cinemático) | No (ya está en una mano) |
-| En caída | Suelta y moviéndose, o expulsada | Sí |
-| En validación | Dentro del volumen útil de un recipiente, esperando estabilizarse | Sí (se cancela la validación) |
+| Liberada / en vuelo | Suelta y moviéndose (cuerpo dinámico) | Sí |
+| Estabilizándose | Dentro del volumen útil de un recipiente, esperando quedar quieta | Sí (se cancela la validación) |
 | Clasificada | Aceptada por su recipiente | No (bloqueada) |
+| Error | Depósito equivocado confirmado; dura 1.2 s (aviso + expulsión) y luego pasa a *en vuelo* | Sí |
 | Recuperable | En reposo en el suelo (y < 0.3 m) | Sí, con el rayo |
 
-Los estados físicos (en caída, en validación, disponible, recuperable) los asigna [sortingMonitor.js](../js/validation/sortingMonitor.js) observando la simulación. Sujeta y clasificada las asigna la máquina de juego. El marcador muestra cuántas figuras hay en los estados transitorios ("2 en caída · 1 recuperable").
+Los estados físicos (en vuelo, estabilizándose, disponible, recuperable) los asigna [sortingMonitor.js](../js/validation/sortingMonitor.js) observando la simulación. Sujeta, clasificada y error los asigna la máquina de juego. El marcador muestra cuántas figuras hay en los estados transitorios ("2 en vuelo · 1 recuperable").
 
-**Fases del reto:** *Pendiente* (botón 3D **Iniciar** visible, no se puede tomar nada y el cronómetro está en 0) → *Activo* → *Completado* (20/20). **Reinicio aleatorio** vuelve a *Pendiente* con una distribución nueva.
+**Ficha única por figura.** Una sola fuente de verdad en [state.js](../js/core/state.js):
+
+```
+{ id, classId, targetBinId, originTableId, status, heldBy, lastBinId, mesh, body }
+```
+
+- `targetBinId`: el recipiente asignado según su categoría.
+- `originTableId`: la mesa de la distribución actual.
+- `mesh` y `body`: referencias a la malla y al cuerpo físico, enlazadas al crear la escena.
+
+**Fases del reto:** *Pendiente* (botón 3D **Comenzar** visible, no se puede tomar nada y el cronómetro está en 0) → *Activo* → *Completado* (20/20). **Reinicio aleatorio** vuelve a *Pendiente* con una distribución nueva.
+
+**Pausa y salida de VR.** Al terminar la sesión (botón *Salir de VR* o menú del sistema):
+
+- se sueltan las figuras sujetas;
+- el cronómetro se pausa y el progreso se conserva;
+- al volver a entrar, el cronómetro continúa.
+
+En la vista previa de escritorio el cronómetro no se pausa (no hay sesión).
 
 **Soltar no valida.** La figura se considera depositada cuando se cumplen dos condiciones:
 
@@ -179,7 +215,7 @@ Así, un rebote que la saca del recipiente no cuenta, y una figura lanzada que c
 |---|---|
 | ✅ Recipiente correcto | +1 total y +1 en el recipiente, destello verde en figura y borde, sonido, figura bloqueada |
 | ❌ Recipiente equivocado | +1 error, destello rojo, sonido grave, mensaje con el recipiente correcto y **expulsión física** |
-| 🏁 Recipiente lleno (5/5) | Se guarda su **tiempo de llenado** (tiempo transcurrido desde *Iniciar*), borde verde y sonido |
+| 🏁 Recipiente lleno (5/5) | Se guarda su **tiempo de llenado**: segundos desde *Comenzar* hasta que su quinta pieza queda validada (antes, «pendiente»). Borde verde y sonido |
 | 🏆 20/20 | Fase *Completado*, se detiene el cronómetro y se muestra el resumen |
 
 **Expulsión.** Es un impulso real (Δv de 2.4 m/s hacia arriba y 0.8 m/s hacia el usuario), no una animación. Durante 0.6 s la figura usa un material **sin fricción**. Sin él, en las pruebas la figura quedaba encajada entre otra figura y la pared, y la fricción lateral frenaba su subida: 5 de 5 expulsiones fallaban. Con él, 6 de 6 salieron.
@@ -189,7 +225,18 @@ Así, un rebote que la saca del recipiente no cuenta, y una figura lanzada que c
 - Una figura clasificada no se puede volver a tomar ni contar.
 - Un error se cuenta **una vez por intento**: si la figura equivocada recae en el mismo recipiente, se vuelve a expulsar sin sumar otro error. Volver a tomarla abre un intento nuevo.
 
-**Precisión** = aciertos ÷ (aciertos + errores). Antes del primer intento muestra "—", no 0 %.
+**Intentos** = aciertos + errores (depósitos confirmados). **Precisión** = aciertos ÷ intentos × 100; sin intentos muestra 0 %, como pide el Anexo.
+
+**Señales distintas:**
+
+| Momento | Visual | Sonido |
+|---|---|---|
+| Acierto | Destello verde | Dos notas ascendentes |
+| Error | Destello rojo | Nota grave |
+| Bote lleno | Borde verde | Tres notas |
+| Fin de partida | Marco verde y resumen | Arpegio |
+
+**Rebotes de contacto.** No se cuenta nada en el instante del choque: solo tras 350 ms de reposo dentro del volumen útil. Los sonidos de impacto tienen un mínimo de 60 ms entre sí.
 
 ## 7. Reinicio aleatorio
 
@@ -217,7 +264,7 @@ El generador aleatorio se inyecta: la app usa `Math.random` y las pruebas usan u
 
 ## 10. Verificación realizada
 
-**Pruebas de lógica.** `node --test tests/logic.test.mjs`: **33 pruebas, 33 pasan** (Node 24). Cubren:
+**Pruebas de lógica.** `node --test tests/logic.test.mjs`: **35 pruebas, 35 pasan** (Node 24). Cubren:
 
 - configuración 4 × 5;
 - volumen de los recipientes;
@@ -228,7 +275,9 @@ El generador aleatorio se inyecta: la app usa `Math.random` y las pruebas usan u
 - tiempo de llenado;
 - flujo 0/20 → 20/20;
 - inicio explícito;
-- estados en caída, en validación y recuperable;
+- estados en vuelo, estabilizándose, error y recuperable;
+- intentos, precisión 0 % sin intentos, tiempos en segundos;
+- ficha única por figura;
 - reinicio;
 - pausa al salir de VR;
 - distribución reproducible y sin encimarse (25 semillas);
@@ -240,10 +289,10 @@ El generador aleatorio se inyecta: la app usa `Math.random` y las pruebas usan u
 |---|---|
 | Carga de módulos e import map | Sin errores ni advertencias de consola o red; *Three.js* y *cannon-es* en verde |
 | Gravedad y distribución | Las 20 figuras caen 1 cm y se asientan sobre las mesas (5 por mesa, todas *disponibles*) |
-| Inicio | Antes de *Iniciar*: fase *Pendiente*, nada se puede tomar. Botón 3D pulsado con el mouse → *Activo* |
+| Inicio | Antes de *Comenzar*: fase *Pendiente*, nada se puede tomar. Botón 3D pulsado con el mouse → *Activo* |
 | Agarre cinemático | Al agarrar, `body.type = 4` (`KINEMATIC`), estado *sujeta* |
 | No atraviesa la mesa | Empujada hacia abajo contra su mesa, su centro quedó en 0.780 m = tablero + media altura |
-| Liberación | Al soltar, `body.type = 1` (`DYNAMIC`), estado *en caída* → *en validación* → *clasificada* |
+| Liberación | Al soltar, `body.type = 1` (`DYNAMIC`), estado *en vuelo* → *estabilizándose* → *clasificada* |
 | Error y expulsión | La esfera en el recipiente de cubos: +1 error, destello rojo, sale, rueda y queda *recuperable* en el suelo |
 | Colisiones | Cuatro cilindros soltados desde 25–61 cm sobre una mesa con figuras chocan, rebotan y se asientan sin atravesarse |
 | 20/20 | Fase *Completado*, cronómetro detenido, tiempo de llenado de cada recipiente registrado, precisión 95 % (1 error) |

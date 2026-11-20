@@ -48,7 +48,7 @@ function setup() {
   return { store, game, calls, drop, tick: (ms) => { clock += ms; } };
 }
 
-/** Igual que setup(), pero sin pulsar "Iniciar". */
+/** Igual que setup(), pero sin pulsar "Comenzar". */
 function setupPending() {
   let clock = 0;
   const store = createStore({ objects: OBJECTS, bins: CONFIG.bins, capacity: CONFIG.perClass });
@@ -108,9 +108,9 @@ describe('Reglas de clasificación (sortingRules)', () => {
     assert.equal(evaluateDeposit('sphere', binOf('cube')), DEPOSIT_RESULT.WRONG);
   });
 
-  test('precisión: — sin intentos; aciertos ÷ intentos después', () => {
+  test('precisión: 0 % sin intentos; aciertos ÷ intentos × 100 después', () => {
     assert.equal(accuracy(0, 0), null);
-    assert.equal(formatAccuracy(accuracy(0, 0)), '—');
+    assert.equal(formatAccuracy(accuracy(0, 0)), '0 %');
     assert.equal(accuracy(3, 1), 0.75);
     assert.equal(formatAccuracy(accuracy(2, 1)), '67 %');
   });
@@ -177,18 +177,18 @@ describe('Estado único, aciertos y errores (store + gameMachine)', () => {
     assert.equal(store.getObject('cube-1').heldBy, 'left');
   });
 
-  test('soltar NO valida: la figura pasa a "en caída" hasta reposar en un recipiente', () => {
+  test('soltar NO valida: la figura pasa a "en vuelo" hasta reposar en un recipiente', () => {
     const { game, store } = setup();
     game.grab('cube-1', 'left');
     assert.equal(store.getObject('cube-1').status, OBJECT_STATUS.HELD);
     game.release('cube-1');
-    assert.equal(store.getObject('cube-1').status, OBJECT_STATUS.FALLING);
+    assert.equal(store.getObject('cube-1').status, OBJECT_STATUS.FLYING);
     assert.equal(store.sortedCount(), 0);
   });
 
-  test('se puede volver a tomar una figura en caída, en validación o recuperable', () => {
+  test('se puede volver a tomar una figura en vuelo, estabilizándose, con error o recuperable', () => {
     const { game, store } = setup();
-    for (const status of [OBJECT_STATUS.FALLING, OBJECT_STATUS.VALIDATING, OBJECT_STATUS.RECOVERABLE]) {
+    for (const status of [OBJECT_STATUS.FLYING, OBJECT_STATUS.SETTLING, OBJECT_STATUS.ERROR, OBJECT_STATUS.RECOVERABLE]) {
       store.setObjectStatus('cube-1', status);
       assert.equal(game.canGrab('cube-1'), true, status);
     }
@@ -217,7 +217,7 @@ describe('Estado único, aciertos y errores (store + gameMachine)', () => {
     assert.equal(drop('cube-1', 'R2'), DEPOSIT_RESULT.WRONG);
     assert.equal(store.getState().stats.errors, 1);
     assert.equal(store.getBin('R2').count, 0);
-    assert.equal(store.getObject('cube-1').status, OBJECT_STATUS.FALLING, 'la expulsión la pone en caída');
+    assert.equal(store.getObject('cube-1').status, OBJECT_STATUS.ERROR, 'error visible mientras se expulsa');
     assert.ok(calls.some(([n]) => n === 'onEject'));
   });
 
@@ -244,13 +244,28 @@ describe('Estado único, aciertos y errores (store + gameMachine)', () => {
     drop('sphere-1', 'R2');
     drop('sphere-2', 'R2');
     assert.equal(store.accuracy(), 3 / 4);
+    assert.equal(store.attempts(), 4, 'intentos = aciertos + errores');
   });
 
-  test('pérdida de tracking: la figura se suelta (en caída) y no cuenta', () => {
+  test('tiempo de bote: "pendiente" antes de 5/5 y segundos desde Comenzar después', () => {
+    assert.equal(timer.formatSeconds(null), 'pendiente');
+    assert.equal(timer.formatSeconds(34_049), '34.0 s');
+  });
+
+  test('ficha única: cada figura conoce su categoría, su recipiente asignado y su mesa de origen', () => {
+    const { store } = setup();
+    const f = store.getObject('prism-3');
+    assert.equal(f.classId, 'prism');
+    assert.equal(f.targetBinId, CONFIG.bins.find((b) => b.classId === 'prism').id);
+    store.setOriginTable('prism-3', 'M2');
+    assert.equal(store.getObject('prism-3').originTableId, 'M2');
+  });
+
+  test('pérdida de tracking: la figura se suelta (en vuelo) y no cuenta', () => {
     const { game, store } = setup();
     game.grab('cube-1', 'left');
     game.cancel('cube-1', 'tracking-lost');
-    assert.equal(store.getObject('cube-1').status, OBJECT_STATUS.FALLING);
+    assert.equal(store.getObject('cube-1').status, OBJECT_STATUS.FLYING);
     assert.equal(store.sortedCount(), 0);
   });
 
@@ -266,7 +281,7 @@ describe('Estado único, aciertos y errores (store + gameMachine)', () => {
     assert.ok(calls.some(([n, id]) => n === 'onBinFilled' && id === 'R1'));
   });
 
-  test('inicio explícito: antes de "Iniciar" no se puede tomar nada ni corre el tiempo', () => {
+  test('inicio explícito: antes de "Comenzar" no se puede tomar nada ni corre el tiempo', () => {
     const { game, store, tick } = setupPending();
     assert.equal(store.getState().phase, PHASE.PENDING);
     assert.equal(game.grab('cube-1', 'left'), false);

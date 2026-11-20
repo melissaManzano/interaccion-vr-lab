@@ -6,7 +6,7 @@
  */
 import * as THREE from 'three';
 import { create2dCanvas, roundRectPath, FONT_STACK } from './canvasText.js';
-import { formatTime } from '../logic/timer.js';
+import { formatSeconds } from '../logic/timer.js';
 
 const W = 384;
 const H = 128;
@@ -55,7 +55,7 @@ export function createBinDisplays({ lab, classes, store, binHeight, binOuter }) 
     }
     ctx.fillStyle = full ? '#bbf7d0' : '#94a3b8';
     ctx.font = `600 34px ${FONT_STACK}`;
-    ctx.fillText(full ? `✓ ${formatTime(completedAtMs)}` : 'Llenando…', 170, 88, W - 186);
+    ctx.fillText(full ? `✓ ${formatSeconds(completedAtMs)}` : 'pendiente', 170, 88, W - 186);
   }
 
   return {

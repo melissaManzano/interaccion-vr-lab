@@ -1,16 +1,17 @@
 /**
  * scoreboard.js — Marcador inmersivo 3D (canvas → textura sobre un plano).
  *
- * Muestra: clasificadas X/20, tiempo global, errores, precisión, estado, avance 0/5 de
- * cada recipiente con su tiempo de llenado, mensajes de retroalimentación y el estado
- * de las manos. No es un div: el DOM no existe dentro del visor.
+ * Muestra: aciertos X/20, tiempo global, intentos, errores, precisión, estado, avance
+ * 0/5 de cada categoría con su tiempo de llenado (segundos desde "Comenzar" o
+ * "pendiente"), mensajes, estados transitorios y manos. Al completar 20/20 el marco se
+ * vuelve verde y aparece el resumen final. No es un div: el DOM no existe en el visor.
  *
  * Rendimiento: el canvas solo se redibuja cuando cambia algún texto visible (se compara
  * una "firma"). Mientras corre el reto el tiempo va en segundos (≈1 redibujo/s).
  */
 import * as THREE from 'three';
 import { PHASE, PHASE_LABEL, MESSAGE_KIND } from '../core/state.js';
-import { formatTime } from '../logic/timer.js';
+import { formatTime, formatSeconds } from '../logic/timer.js';
 import { formatAccuracy } from '../validation/sortingRules.js';
 import { create2dCanvas, roundRectPath, wrapText, FONT_STACK } from './canvasText.js';
 
@@ -25,21 +26,22 @@ const MESSAGE_STYLE = {
   [MESSAGE_KIND.ERROR]: { bg: '#7f1d1d', fg: '#fecaca' },
 };
 const DEFAULT_HINT = {
-  pending: 'Apunta al botón "Iniciar" (abajo) y pellizca para comenzar.',
+  pending: 'Apunta al botón "Comenzar" (abajo) y pellizca para empezar la partida.',
   active: 'Deja cada figura en el recipiente con su misma forma, letra y color.',
   completed: '¡Excelente trabajo! Pulsa "Reinicio aleatorio" para otra ronda.',
 };
 
-/** "2 en caída · 1 en validación · 1 recuperable" (solo los estados transitorios presentes). */
+/** "2 en vuelo · 1 estabilizándose · 1 recuperable" (solo los estados transitorios presentes). */
 function describeStates(counts) {
   const parts = [];
-  if (counts.falling) parts.push(`${counts.falling} en caída`);
-  if (counts.validating) parts.push(`${counts.validating} en validación`);
+  if (counts.flying) parts.push(`${counts.flying} en vuelo`);
+  if (counts.settling) parts.push(`${counts.settling} estabilizándose`);
+  if (counts.error) parts.push(`${counts.error} con error`);
   if (counts.recoverable) parts.push(`${counts.recoverable} ${counts.recoverable === 1 ? 'recuperable' : 'recuperables'} (ámbar)`);
   return parts.join(' · ');
 }
 
-export function createScoreboard({ parent, store, classes, bins, title, position, width }) {
+export function createScoreboard({ parent, store, classes, bins, title, subtitle = '', position, width }) {
   const classById = new Map(classes.map((c) => [c.id, c]));
   const { canvas, ctx } = create2dCanvas(CANVAS_W, CANVAS_H);
   const texture = new THREE.CanvasTexture(canvas);
@@ -90,6 +92,8 @@ export function createScoreboard({ parent, store, classes, bins, title, position
     return {
       sorted: store.sortedCount(),
       total: store.totalObjects(),
+      attempts: store.attempts(),
+      completed,
       time: formatTime(store.elapsedMs(now), completed),
       errors: state.stats.errors,
       accuracy: formatAccuracy(store.accuracy()),
@@ -116,8 +120,9 @@ export function createScoreboard({ parent, store, classes, bins, title, position
     ctx.fillStyle = bg;
     roundRectPath(ctx, 0, 0, CANVAS_W, CANVAS_H, 36);
     ctx.fill();
-    ctx.strokeStyle = '#38bdf8';
-    ctx.lineWidth = 6;
+    // Indicador de éxito final: marco verde y más grueso al completar 20/20.
+    ctx.strokeStyle = view.completed ? '#22c55e' : '#38bdf8';
+    ctx.lineWidth = view.completed ? 14 : 6;
     roundRectPath(ctx, 3, 3, CANVAS_W - 6, CANVAS_H - 6, 34);
     ctx.stroke();
 
@@ -140,15 +145,18 @@ export function createScoreboard({ parent, store, classes, bins, title, position
 
     ctx.fillStyle = '#94a3b8';
     ctx.font = `400 26px ${FONT_STACK}`;
-    ctx.fillText('Apunta · pellizca para tomar · abre los dedos sobre el recipiente correcto', 48, 96, CANVAS_W - 96);
+    ctx.fillStyle = '#7dd3fc';
+    ctx.fillText(`${subtitle} · pellizca para tomar, abre los dedos sobre su recipiente`, 48, 96, CANVAS_W - 96);
 
-    // Fila de indicadores
-    const boxW = 220;
-    const gap = (CANVAS_W - 96 - 4 * boxW) / 3;
-    drawStat(48, 140, boxW, 'CLASIFICADAS', `${view.sorted}/${view.total}`, '#38bdf8');
-    drawStat(48 + (boxW + gap), 140, boxW, 'TIEMPO', view.time, '#f1f5f9', view.time.length > 5 ? 52 : 62);
-    drawStat(48 + 2 * (boxW + gap), 140, boxW, 'ERRORES', String(view.errors), view.errors > 0 ? '#fca5a5' : '#f1f5f9');
-    drawStat(48 + 3 * (boxW + gap), 140, boxW, 'PRECISIÓN', view.accuracy, '#fde68a');
+    // Fila de indicadores. Precisión = aciertos / intentos × 100 (intentos = aciertos + errores).
+    const gap = 14;
+    const boxW = (CANVAS_W - 96 - 4 * gap) / 5;
+    const col = (i) => 48 + i * (boxW + gap);
+    drawStat(col(0), 140, boxW, 'ACIERTOS', `${view.sorted}/${view.total}`, '#38bdf8', 54);
+    drawStat(col(1), 140, boxW, 'TIEMPO', view.time, '#f1f5f9', view.time.length > 5 ? 40 : 54);
+    drawStat(col(2), 140, boxW, 'INTENTOS', String(view.attempts), '#f1f5f9', 54);
+    drawStat(col(3), 140, boxW, 'ERRORES', String(view.errors), view.errors > 0 ? '#fca5a5' : '#f1f5f9', 54);
+    drawStat(col(4), 140, boxW, 'PRECISIÓN', view.accuracy, '#fde68a', 48);
 
     // Tabla de recipientes
     bins.forEach((b, i) => {
@@ -223,7 +231,7 @@ export function createScoreboard({ parent, store, classes, bins, title, position
     ctx.fillStyle = full ? '#86efac' : '#64748b';
     ctx.font = `600 26px ${FONT_STACK}`;
     ctx.textAlign = 'right';
-    ctx.fillText(full ? `✓ lleno en ${formatTime(s.completedAtMs)}` : 'sin completar', x + w - 16, y + 13);
+    ctx.fillText(full ? `✓ ${formatSeconds(s.completedAtMs)}` : 'pendiente', x + w - 16, y + 13);
     ctx.textAlign = 'left';
   }
 

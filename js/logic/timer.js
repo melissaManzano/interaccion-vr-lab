@@ -35,6 +35,15 @@ export function elapsedMs(timer, now) {
 }
 
 /**
+ * Tiempo de llenado de un bote: segundos desde el inicio de la partida, "34.0 s".
+ * null (aún no se llena) → "pendiente".
+ */
+export function formatSeconds(ms) {
+  if (ms === null || ms === undefined || !Number.isFinite(ms)) return 'pendiente';
+  return `${(Math.max(0, ms) / 1000).toFixed(1)} s`;
+}
+
+/**
  * Formatea milisegundos como mm:ss o mm:ss.d
  * @param {number} ms
  * @param {boolean} withTenths  incluye décimas de segundo

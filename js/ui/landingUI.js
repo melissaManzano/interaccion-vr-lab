@@ -23,6 +23,9 @@ export function createLandingUI(doc = document) {
     objectives: byId('objectives-list'),
     summaryProgress: byId('summary-progress'),
     summaryErrors: byId('summary-errors'),
+    summaryAttempts: byId('summary-attempts'),
+    resetButton: byId('btn-reset'),
+    soundSwitch: byId('pref-sound'),
     summaryAccuracy: byId('summary-accuracy'),
     summaryPhase: byId('summary-phase'),
     summaryTime: byId('summary-time'),
@@ -52,6 +55,27 @@ export function createLandingUI(doc = document) {
       els.enterButton.setAttribute('aria-busy', String(busy));
       els.enterLabel.textContent = label;
       els.enterSpinner.classList.toggle('d-none', !busy);
+    },
+
+    onResetClick(handler) {
+      els.resetButton.addEventListener('click', handler);
+    },
+
+    /**
+     * Preferencia opcional guardada en localStorage (no se guardan partidas).
+     * Si el almacenamiento no está disponible (modo privado), funciona sin recordar.
+     */
+    bindSoundPreference(onChange) {
+      const KEY = 'interaccion-vr-lab.sound';
+      let enabled = true;
+      try { enabled = localStorage.getItem(KEY) !== 'off'; } catch { /* sin almacenamiento */ }
+      els.soundSwitch.checked = enabled;
+      onChange(enabled);
+      els.soundSwitch.addEventListener('change', () => {
+        const on = els.soundSwitch.checked;
+        try { localStorage.setItem(KEY, on ? 'on' : 'off'); } catch { /* sin almacenamiento */ }
+        onChange(on);
+      });
     },
 
     onEnterClick(handler) {
@@ -93,19 +117,20 @@ export function createLandingUI(doc = document) {
       }));
     },
 
-    renderSummary({ progress, errors, accuracy, phase, time, bins }) {
+    renderSummary({ progress, attempts, errors, accuracy, phase, time, bins }) {
       const binsSignature = bins.map((b) => `${b.count}${b.time}`).join(',');
-      const signature = `${progress}|${errors}|${accuracy}|${phase}|${time}|${binsSignature}`;
+      const signature = `${progress}|${attempts}|${errors}|${accuracy}|${phase}|${time}|${binsSignature}`;
       if (signature === lastSummary) return;
       lastSummary = signature;
       els.summaryProgress.textContent = progress;
       els.summaryErrors.textContent = errors;
+      els.summaryAttempts.textContent = attempts;
       els.summaryAccuracy.textContent = accuracy;
       els.summaryPhase.textContent = phase;
       els.summaryTime.textContent = time;
       els.summaryBins.replaceChildren(...bins.map((b) => {
         const li = doc.createElement('li');
-        li.textContent = `${b.id}: ${b.count}/${b.capacity}${b.time ? ` · lleno en ${b.time}` : ''}`;
+        li.textContent = `${b.id}: ${b.count}/${b.capacity} · ${b.time ? `lleno a los ${b.time}` : 'pendiente'}`;
         return li;
       }));
     },
