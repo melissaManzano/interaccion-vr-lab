@@ -17,11 +17,12 @@ const COLORS = Object.freeze({
   held: 0x60a5fa,
   success: 0x22c55e,
   error: 0xef4444,
+  recoverable: 0xf59e0b, // ámbar: "estoy en el suelo, recógeme"
 });
 const HOVER_SCALE = 1.08;
 
 export function createObjectSet({
-  parent, physics, classes, perClass, tableTopY, dropHeight, sphereAngularDamping, onImpact = () => {},
+  parent, physics, classes, perClass, tableTopY, dropHeight, sphereDamping, onImpact = () => {},
 }) {
   const group = new THREE.Group();
   group.name = 'Figuras';
@@ -35,6 +36,7 @@ export function createObjectSet({
     const geometry = collider.geometry(cls.size);
     geometries.push(geometry);
     const halfHeight = collider.halfHeight(cls.size);
+    const probeRadius = collider.probeRadius(cls.size);
 
     for (let i = 1; i <= perClass; i += 1) {
       const id = `${cls.id}-${i}`;
@@ -50,7 +52,7 @@ export function createObjectSet({
         shape: collider.shape(cls.size),
         mass: cls.mass,
         // undefined = amortiguamiento por defecto de config.physics
-        angularDamping: cls.collider === 'sphere' ? sphereAngularDamping : undefined,
+        ...(cls.collider === 'sphere' ? sphereDamping : {}),
       });
       body.userData = { id };
       body.addEventListener('collide', (event) => {
@@ -59,7 +61,7 @@ export function createObjectSet({
       });
 
       objects.push({
-        id, classId: cls.id, cls, mesh, material, body, halfHeight,
+        id, classId: cls.id, cls, mesh, material, body, halfHeight, probeRadius,
         home: { x: 0, y: 0, z: 0, yaw: 0 },
         flashUntil: 0, flashColor: 0,
       });
@@ -125,9 +127,14 @@ export function createObjectSet({
         else if (status === OBJECT_STATUS.SORTED) { hex = COLORS.success; intensity = 0.3; }
         else if (status === OBJECT_STATUS.HELD) { hex = COLORS.held; intensity = 0.45; }
         else if (hovered.has(obj.id)) { hex = COLORS.hover; intensity = 0.25; }
+        else if (status === OBJECT_STATUS.RECOVERABLE) {
+          // Pulso lento (≈1 Hz): una figura caída se distingue sin buscarla.
+          hex = COLORS.recoverable;
+          intensity = 0.25 + 0.2 * Math.sin(now * 0.006);
+        }
         obj.material.emissive.setHex(hex);
         obj.material.emissiveIntensity = intensity;
-        const grow = hovered.has(obj.id) && status === OBJECT_STATUS.FREE;
+        const grow = hovered.has(obj.id) && status !== OBJECT_STATUS.HELD;
         obj.mesh.scale.setScalar(grow ? HOVER_SCALE : 1);
       }
     },

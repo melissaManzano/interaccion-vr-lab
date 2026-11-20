@@ -9,7 +9,9 @@ Aplicación web de **realidad virtual inmersiva** para **Meta Quest 3** con **f�
 - **Repositorio:** https://github.com/melissaManzano/interaccion-vr-lab
 - **Video de demostración:** *(agregar enlace)*
 
-> Este repositorio amplía la práctica 3.1 ([laboratorio-vr-ensamblaje](https://github.com/melissaManzano/laboratorio-vr-ensamblaje)).
+> Este repositorio amplía la práctica 3.1 ([laboratorio-vr-ensamblaje](https://github.com/melissaManzano/laboratorio-vr-ensamblaje)). Su último commit está marcado con la etiqueta `practica-3.1`.
+
+![Vista general: 4 mesas, 20 figuras, 4 recipientes y marcador](docs/capturas/01-mesas-y-20-figuras.png)
 
 ---
 
@@ -35,6 +37,7 @@ En la PC el botón muestra **"VR no disponible aquí"**, y es lo normal. La **Vi
 
 | Acción | Control |
 |---|---|
+| Comenzar la ronda | **Clic** en el botón 3D *Iniciar* |
 | Tomar una figura | Mantener **clic izquierdo** sobre ella |
 | Soltarla | Soltar el botón: cae con gravedad |
 | Alejar o acercar la figura sostenida | **Rueda** mientras la sostienes |
@@ -64,11 +67,12 @@ El archivo `.nojekyll` evita que GitHub Pages procese el sitio con Jekyll.
 
 | Acción | Gesto |
 |---|---|
+| Comenzar | Apunta al botón 3D **Iniciar** y cierra la pinza |
 | Apuntar | Cada mano proyecta un rayo desde el punto entre el pulgar y el índice |
 | Tomar de cerca | Cierra la pinza **junto a** una figura (a menos de 7 cm) |
 | Tomar a distancia | Apunta con el rayo y cierra la pinza |
 | Alejar o acercar | Con agarre a distancia, **estira o recoge el brazo** |
-| Soltar o lanzar | Abre los dedos: la figura conserva la velocidad de tu mano |
+| Soltar o lanzar | Abre los dedos: la figura vuelve a ser dinámica y conserva la velocidad de tu mano |
 | Reinicio aleatorio o salir | Apunta al botón 3D y cierra la pinza |
 
 Colores del rayo: **blanco** sin objetivo, **celeste** sobre una figura, **amarillo** sobre un botón y **verde** mientras sostienes.
@@ -81,7 +85,8 @@ Colores del rayo: **blanco** sin objetivo, **celeste** sobre una figura, **amari
 
 - **4 mesas** con borde bajo: a la izquierda y a la derecha, cerca y lejos.
 - **1 mostrador central** con **4 recipientes abiertos** (27 × 27 × 14 cm).
-- **Marcador 3D** encima del mostrador, con los botones *Reinicio aleatorio* y *Salir de VR*.
+- **Marcador 3D** encima del mostrador, con los botones *Reinicio aleatorio*, *Iniciar* (solo antes de comenzar) y *Salir de VR*.
+- El esquema con medidas, alturas y recorridos seguros de las manos está en [docs/esquema-laboratorio.svg](docs/esquema-laboratorio.svg).
 
 **Clases** (5 figuras de cada una, 20 en total):
 
@@ -94,7 +99,22 @@ Colores del rayo: **blanco** sin objetivo, **celeste** sobre una figura, **amari
 
 Cada clase se reconoce por **forma, color y letra**. Cada recipiente lleva además su nombre y una **silueta flotante** de la figura que le corresponde. El rojo y el verde se reservan para error y acierto.
 
+### Estados de cada figura
+
+| Estado | Cuándo | Señal visual |
+|---|---|---|
+| Disponible | En reposo sobre una mesa | — |
+| Sujeta | En tu mano: el cuerpo pasa a **cinemático** | Azul |
+| En caída | Suelta y moviéndose: el cuerpo vuelve a **dinámico** | — |
+| En validación | Dentro de un recipiente, esperando estabilizarse | — |
+| Clasificada | Aceptada; ya no se puede tomar | Verde |
+| Recuperable | En reposo en el suelo; recógela con el rayo | Ámbar pulsante |
+
+El marcador indica cuántas figuras están en caída, en validación o recuperables.
+
 ### Reglas
+
+La ronda empieza al pulsar **Iniciar**: antes no se puede tomar nada y el cronómetro está en 00:00.
 
 **Soltar no valida.** La figura cae y la validación ocurre cuando **queda en reposo dentro** de un recipiente (350 ms casi quieta):
 
@@ -113,12 +133,16 @@ Cada clase se reconoce por **forma, color y letra**. Cada recipiente lleva adem�
 | Por recipiente | De 0/5 a 5/5, en el marcador y en una pantalla detrás de cada recipiente |
 | Errores | Una vez por intento. Si una figura equivocada recae en el mismo recipiente, se expulsa otra vez sin contar otro error |
 | Precisión | Aciertos ÷ (aciertos + errores). Muestra "—" antes del primer intento |
-| Tiempo global | Arranca con el primer agarre, se pausa fuera de VR y se detiene en 20/20 |
-| Tiempo de llenado | El tiempo global en el momento en que cada recipiente llega a 5/5 |
+| Tiempo global | Arranca con *Iniciar*, se pausa fuera de VR y se detiene en 20/20 |
+| Tiempo de llenado | Tiempo desde *Iniciar* hasta que cada recipiente llega a 5/5 |
 
-**Reinicio aleatorio.** Vuelve a repartir las 20 figuras entre las mesas, en posiciones y giros nuevos, y pone en cero todo lo anterior.
+**Reinicio aleatorio.** Vuelve a repartir las 20 figuras entre las mesas, en posiciones y giros nuevos, pone en cero todo lo anterior y regresa a *Pendiente* (botón *Iniciar*).
 
-**Recuperación.** Si una figura sale de la sala, vuelve a su mesa. Las que caen al suelo se pueden recoger con el rayo.
+**Recuperación segura:**
+
+- Las figuras que caen al suelo quedan *recuperables* y se recogen con el rayo.
+- Si una figura sale de la sala, vuelve a su mesa.
+- Si se pierde el seguimiento de la mano o termina la sesión VR, la figura sujeta se suelta y cae.
 
 Todo se ajusta en [js/config.js](js/config.js) sin tocar la lógica: medidas, masas, fricción, rebote, umbrales de reposo, fuerza de expulsión, etc.
 
@@ -138,7 +162,7 @@ js/
 ├── physics/              FÍSICA (cannon-es)
 │   ├── physicsWorld.js     Mundo, gravedad, materiales, colisionadores estáticos, paso fijo
 │   ├── colliders.js        Malla + colisionador de cada figura con las mismas medidas
-│   └── holdController.js   Sostener una figura por velocidad sin romper colisiones
+│   └── holdController.js   Agarre: dinámico → cinemático (por velocidad + barrido) → dinámico
 ├── objects/              GENERACIÓN
 │   ├── objectFactory.js    Crea las 20 figuras (malla + cuerpo rígido) y sincroniza
 │   └── layoutGenerator.js  Reparto aleatorio sobre las mesas (puro, con semilla opcional)
@@ -148,7 +172,7 @@ js/
 │   └── interactionManager.js  Manos/mouse → agarrar, sostener, soltar, botones
 ├── validation/           VALIDACIÓN
 │   ├── sortingRules.js     Reglas puras: dentro del recipiente, acierto/error, precisión
-│   └── sortingMonitor.js   Observa la física: reposo → depósito; expulsión; recuperación
+│   └── sortingMonitor.js   Observa la física: estados, depósito, expulsión y recuperación
 ├── logic/
 │   ├── gameMachine.js      Máquina de estados: agarres, depósitos, llenado, fin, reinicio
 │   └── timer.js            Cronómetro con pausa
@@ -161,8 +185,8 @@ js/
 ├── xr/                   Sin cambios desde 3.1: sesión, manos, pinza con histéresis
 ├── audio/soundFx.js      Sonidos sintetizados (incluye golpes según la velocidad de impacto)
 └── debug/desktopPreview.js  Vista previa con mouse (escritorio)
-tests/logic.test.mjs      31 pruebas de reglas de negocio con Node
-docs/                     Diseño WebXR (3.1) y física/clasificación (3.2)
+tests/logic.test.mjs      33 pruebas de reglas de negocio con Node
+docs/                     Diseño WebXR (3.1), física/clasificación y diseño de la actividad (3.2), esquema y capturas
 ```
 
 El razonamiento completo está en [docs/04-fisica-y-clasificacion.md](docs/04-fisica-y-clasificacion.md):
@@ -176,12 +200,22 @@ El razonamiento completo está en [docs/04-fisica-y-clasificacion.md](docs/04-fi
 - verificación realizada;
 - licencias.
 
+El diseño de la actividad está en [docs/05-diseno-de-la-actividad.md](docs/05-diseno-de-la-actividad.md):
+
+- módulos reutilizados de la 3.1 y referencia `webxr_vr_handinput_pointerdrag`;
+- respaldo de la 3.1;
+- categorías y reglas;
+- esquema de mesas y alturas;
+- conceptos de física (malla, cuerpo y colisionador; paso fijo);
+- capturas;
+- qué se prueba en escritorio y qué en el visor.
+
 Los fundamentos de WebXR y del seguimiento de manos siguen en [docs/02-webxr-y-arquitectura.md](docs/02-webxr-y-arquitectura.md).
 
 **Decisiones principales:**
 
 - **La física manda.** La malla solo copia la pose interpolada del cuerpo rígido. No hay *snap* ni animaciones que simulen caídas.
-- **Sostener sin romper la física.** La figura en la mano sigue siendo dinámica y se mueve por velocidad, así que choca con mesas, paredes y otras figuras. Al soltarla conserva su velocidad.
+- **Dinámico → cinemático → dinámico.** Al sujetarla, la figura pasa a cinemática y sigue a la mano por velocidad (sin teletransportes). Un barrido con rayo evita que atraviese mesas y paredes, y empuja a las demás figuras. Al soltarla vuelve a dinámica con una velocidad de liberación promediada y limitada.
 - **Validar en reposo, no al soltar.** Un rebote que saca la figura no cuenta, y un lanzamiento que entra sí cuenta.
 - **Reglas puras.** Lo que decide aciertos, errores, precisión y distribución no depende de Three.js ni de cannon-es, y se prueba con Node.
 - **Un solo estado.** Los totales se calculan desde el estado; el marcador, las pantallas y la portada solo leen.
@@ -213,30 +247,31 @@ Los fundamentos de WebXR y del seguimiento de manos siguen en [docs/02-webxr-y-a
 | # | Requisito | Cómo probar | Resultado esperado | Resultado observado | Evidencia |
 |---|---|---|---|---|---|
 | 1 | Portada, compatibilidad (incluye cannon-es) | Escritorio y modo dispositivo | Todo visible, checks correctos | ✅ Escritorio (Chrome headless) | |
-| 2 | Sin errores; import map con versiones fijadas | Console y Network | 0 errores; three 0.170.0 y cannon-es 0.20.0 en 200 | ✅ Local | |
+| 2 | Sin errores; import map con versiones fijadas | Console y Network | 0 errores; three 0.170.0 y cannon-es 0.20.0 en 200 | ✅ Local (0 errores y 0 advertencias) | |
 | 3 | Despliegue en Pages (HTTPS) | Abrir https://melissamanzano.github.io/interaccion-vr-lab/ | Igual que en local | | |
 | 4 | Sesión VR real y salida | Quest → Entrar a VR → Salir | Fondo virtual, vuelve a la portada | | |
 | 5 | Manos izquierda y derecha | Marcador "Izquierda ✓ Derecha ✓" | Ambas detectadas | | |
-| 6 | 4 mesas, 20 figuras (4 × 5) al azar | Observación y reinicio | 5 por mesa, clases mezcladas | ✅ Escritorio | |
-| 7 | Gravedad y reposo | Al cargar | Las figuras caen y se asientan | ✅ Escritorio | |
-| 8 | Pinza cercana y a distancia | Con cada mano | La figura sigue a la mano y choca | Mouse ✅ / Quest pendiente | |
-| 9 | Colisiones con mesa, suelo, recipiente y otras figuras | Empujar, soltar sobre el borde, apilar | No atraviesa nada; rebota y rueda | ✅ Escritorio (borde, pila) | |
-| 10 | Acierto | Figura en su recipiente | Verde, sonido, +1, X/5 | ✅ Escritorio | |
-| 11 | Error y expulsión | Figura en otro recipiente | Rojo, +1 error, sale del recipiente | ✅ Escritorio (6/6) | |
-| 12 | Precisión y tiempos de llenado | Llenar un recipiente | 5/5 con tiempo; precisión correcta | ✅ Escritorio | |
-| 13 | 20/20 y fin | Completar todo | Cronómetro detenido, resumen | ✅ Pruebas de lógica | |
-| 14 | Reinicio aleatorio | Botón 3D | 0/20, nueva distribución | ✅ Escritorio | |
+| 6 | 4 mesas, 20 figuras (4 × 5) al azar | Observación y reinicio | 5 por mesa, clases mezcladas | ✅ Escritorio | [01](docs/capturas/01-mesas-y-20-figuras.png) |
+| 7 | Gravedad y reposo | Al cargar | Las figuras caen y se asientan | ✅ Escritorio | [01](docs/capturas/01-mesas-y-20-figuras.png) |
+| 8 | Pinza cercana y a distancia; cinemático al sujetar, dinámico al soltar | Con cada mano | La figura sigue a la mano sin atravesar la mesa | Mouse ✅ (tipo 4 → 1) / Quest pendiente | [02](docs/capturas/02-agarre-cinematico.png) |
+| 9 | Colisiones con mesa, suelo, recipiente y otras figuras | Empujar, soltar sobre el borde, apilar | No atraviesa nada; rebota y rueda | ✅ Escritorio | [05](docs/capturas/05-colisiones-caida.png), [06](docs/capturas/06-colisiones-reposo-y-recuperable.png) |
+| 10 | Acierto | Figura en su recipiente | Verde, sonido, +1, X/5 | ✅ Escritorio | [03](docs/capturas/03-acierto.png) |
+| 11 | Error y expulsión | Figura en otro recipiente | Rojo, +1 error, sale del recipiente | ✅ Escritorio | [04](docs/capturas/04-error-y-expulsion.png) |
+| 12 | Precisión y tiempos de llenado | Llenar los recipientes | 5/5 con tiempo; precisión correcta | ✅ Escritorio | [08](docs/capturas/08-marcador-final.png) |
+| 13 | Inicio, 20/20 y fin | *Iniciar* y completar todo | Cronómetro detenido, mensaje final | ✅ Escritorio | [07](docs/capturas/07-vista-final.png), [08](docs/capturas/08-marcador-final.png) |
+| 14 | Reinicio aleatorio | Botón 3D | 0/20, *Pendiente*, nueva distribución | ✅ Escritorio | |
 | 15 | Salir y reentrar | Botón y menú del sistema | Progreso conservado; figuras en mano caen | | |
 | 16 | Rendimiento y comodidad en el visor | OVR Metrics, uso de 5 min | Fluido y sin mareo | | |
 
-**Pruebas automatizadas:** `node --test tests/logic.test.mjs` (Node 18+, sin npm) da **31/31**.
+**Pruebas automatizadas:** `node --test tests/logic.test.mjs` (Node 18+, sin npm) da **33/33**.
 
 **Se debe validar físicamente en el Quest:** las pruebas 3 a 5, 8, 15 y 16, la sensibilidad de la pinza y la sensación del "carrete".
 
 ## 9. Limitaciones conocidas
 
 - cannon-es no tiene detección continua de colisiones (CCD). Un lanzamiento muy rápido podría atravesar una pared delgada. Se mitiga limitando la velocidad al soltar y recuperando las figuras que escapan.
-- Las manos no tienen colisionador propio: empujan figuras solo cuando las sostienen.
+- Las manos no tienen colisionador propio: empujan figuras solo a través de la figura que sostienen.
+- El barrido del agarre cinemático usa un rayo desde el centro de la figura. Si su borde roza una esquina, puede entrar unos milímetros; al soltarla, el solver la separa.
 - La vista previa de escritorio no simula manos; sirve para probar la física y la lógica.
 - Si el CDN de WebXR Input Profiles no responde, no aparecen las mallas de las manos (los rayos sí). Solución: `hands.modelProfile: 'spheres'` en `config.js`.
 

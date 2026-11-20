@@ -34,7 +34,7 @@ export function createInteractionManager({ registry, drag, hold, objects, game, 
     drag.begin(source.id, {
       objectId, objectPosition: obj.mesh.position, ray: source.ray, hitPoint, near, reach: reachOf(source),
     });
-    hold.begin(obj.body);
+    hold.begin(obj.body, obj.probeRadius);
   }
 
   function pointerDown(source) {

@@ -14,10 +14,36 @@
 import * as timer from '../logic/timer.js';
 import { accuracy } from '../validation/sortingRules.js';
 
+/**
+ * Estados de una figura:
+ *
+ *   disponible ──pinza──▶ sujeta ──abrir dedos──▶ en caída ──reposa fuera──▶ disponible
+ *        ▲                  ▲                       │    └──reposa en el suelo──▶ recuperable
+ *        │                  └────── pinza ──────────┤
+ *        │                                          └──entra a un recipiente──▶ en validación
+ *        │                                                 │ quieta 350 ms
+ *        │                           recipiente correcto ──┴── recipiente equivocado
+ *        │                                  ▼                         ▼
+ *        └──── reinicio ◀──────────── clasificada            expulsión → en caída
+ *
+ * Solo "sujeta" y "clasificada" impiden tomarla con otra pinza.
+ */
 export const OBJECT_STATUS = Object.freeze({
-  FREE: 'free', // sobre una mesa, el piso o rodando: se puede tomar
-  HELD: 'held', // en una mano
+  AVAILABLE: 'available', // en reposo sobre una mesa o el mostrador
+  HELD: 'held', // en una mano (cuerpo cinemático)
+  FALLING: 'falling', // suelta y en movimiento (cuerpo dinámico)
+  VALIDATING: 'validating', // dentro de un recipiente, esperando estabilizarse
   SORTED: 'sorted', // clasificada correctamente (bloqueada)
+  RECOVERABLE: 'recoverable', // en reposo en el suelo: se recoge con el rayo
+});
+
+export const OBJECT_STATUS_LABEL = Object.freeze({
+  available: 'Disponible',
+  held: 'Sujeta',
+  falling: 'En caída',
+  validating: 'En validación',
+  sorted: 'Clasificada',
+  recoverable: 'Recuperable',
 });
 
 export const PHASE = Object.freeze({
@@ -68,7 +94,7 @@ export function createStore({ objects, bins, capacity }) {
 
   for (const o of objects) {
     if (state.objects.has(o.id)) throw new Error(`ID de figura duplicado: ${o.id}`);
-    state.objects.set(o.id, { id: o.id, classId: o.classId, status: OBJECT_STATUS.FREE, heldBy: null, lastBinId: null });
+    state.objects.set(o.id, { id: o.id, classId: o.classId, status: OBJECT_STATUS.AVAILABLE, heldBy: null, lastBinId: null });
   }
   for (const b of bins) {
     if (state.bins.has(b.id)) throw new Error(`ID de recipiente duplicado: ${b.id}`);
@@ -124,6 +150,7 @@ export function createStore({ objects, bins, capacity }) {
     setObjectStatus(id, status, heldBy = null) {
       if (!VALID_STATUS.has(status)) throw new Error(`Estado de figura inválido: ${status}`);
       const obj = getObject(id);
+      if (obj.status === status && status !== OBJECT_STATUS.HELD) return; // sin cambios: no se emite
       obj.status = status;
       obj.heldBy = status === OBJECT_STATUS.HELD ? heldBy : null;
       if (status === OBJECT_STATUS.HELD) obj.lastBinId = null; // un nuevo intento
@@ -150,6 +177,13 @@ export function createStore({ objects, bins, capacity }) {
       if (filled) bin.completedAtMs = nowElapsedMs;
       emit('correct');
       return filled;
+    },
+
+    /** Cuántas figuras hay en cada estado (para el marcador y la portada). */
+    countByStatus() {
+      const counts = Object.fromEntries(Object.values(OBJECT_STATUS).map((s) => [s, 0]));
+      for (const obj of state.objects.values()) counts[obj.status] += 1;
+      return counts;
     },
 
     recordError(objectId, binId) {
@@ -199,7 +233,7 @@ export function createStore({ objects, bins, capacity }) {
     /** Restaura figuras, recipientes, estadísticas, fase y cronómetro. */
     resetProgress() {
       for (const obj of state.objects.values()) {
-        obj.status = OBJECT_STATUS.FREE;
+        obj.status = OBJECT_STATUS.AVAILABLE;
         obj.heldBy = null;
         obj.lastBinId = null;
       }

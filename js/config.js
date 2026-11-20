@@ -118,15 +118,20 @@ export const CONFIG = deepFreeze({
     },
     linearDamping: 0.05,
     angularDamping: 0.12,
-    sphereAngularDamping: 0.35, // la esfera rueda menos y no cae de la mesa con facilidad
+    // cannon-es no modela la resistencia a la rodadura: sin esto, una esfera lanzada a
+    // 1 m/s rodaba más de 2.6 m por el suelo. Con estos valores se detiene en ~1 m.
+    sphereLinearDamping: 0.4,
+    sphereAngularDamping: 0.6,
   },
 
-  /** Control de agarre: la figura sigue a la mano por VELOCIDAD (no se teletransporta). */
+  /**
+   * Agarre: la figura pasa a CINEMÁTICA mientras está en la mano y se mueve por
+   * VELOCIDAD hacia el objetivo (no se teletransporta). Al soltar vuelve a DINÁMICA.
+   */
   hold: {
     stiffness: 18, // 1/s: fracción del error que se corrige por segundo
     maxSpeed: 5, // m/s mientras se sostiene
-    maxReleaseSpeed: 3.5, // m/s al soltar (permite lanzar con suavidad)
-    heldAngularDamping: 0.9,
+    maxReleaseSpeed: 3.5, // m/s al soltar (velocidad de liberación estable y acotada)
   },
 
   /**
@@ -142,6 +147,7 @@ export const CONFIG = deepFreeze({
     errorFlashMs: 1200,
     successFlashMs: 900,
     messageMs: 3500,
+    floorZoneY: 0.3, // en reposo por debajo de esta altura = en el suelo ("recuperable")
     respawnBelowY: -0.5, // por si una figura atraviesa algo o sale de la sala
     respawnRadius: 3.2,
   },
@@ -192,8 +198,9 @@ export const CONFIG = deepFreeze({
   },
 
   buttons: [
-    { id: 'reset', label: 'Reinicio aleatorio', color: 0x2563eb, position: [-0.2, 1.06, -1.28] },
-    { id: 'exit', label: 'Salir de VR', color: 0xb91c1c, position: [0.2, 1.06, -1.28] },
+    { id: 'reset', label: 'Reinicio aleatorio', color: 0x2563eb, position: [-0.36, 1.06, -1.28] },
+    { id: 'start', label: 'Iniciar', color: 0x0d9488, position: [0, 1.06, -1.28] }, // visible solo en "Pendiente"
+    { id: 'exit', label: 'Salir de VR', color: 0xb91c1c, position: [0.36, 1.06, -1.28] },
   ],
 
   desktopCamera: {

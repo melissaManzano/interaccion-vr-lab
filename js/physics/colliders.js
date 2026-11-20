@@ -25,6 +25,8 @@ export const COLLIDERS = Object.freeze({
     geometry: ({ side }) => new THREE.BoxGeometry(side, side, side),
     shape: ({ side }) => new CANNON.Box(new CANNON.Vec3(side / 2, side / 2, side / 2)),
     halfHeight: ({ side }) => side / 2,
+    // Distancia centro→superficie usada por el barrido del agarre cinemático.
+    probeRadius: ({ side }) => side * 0.6,
     flatShading: false,
   },
   sphere: {
@@ -32,6 +34,7 @@ export const COLLIDERS = Object.freeze({
     geometry: ({ radius }) => new THREE.SphereGeometry(radius, 24, 16),
     shape: ({ radius }) => new CANNON.Sphere(radius),
     halfHeight: ({ radius }) => radius,
+    probeRadius: ({ radius }) => radius,
     flatShading: false,
   },
   cylinder: {
@@ -39,6 +42,7 @@ export const COLLIDERS = Object.freeze({
     geometry: ({ radius, height, segments = 16 }) => new THREE.CylinderGeometry(radius, radius, height, segments),
     shape: ({ radius, height, segments = 16 }) => new CANNON.Cylinder(radius, radius, height, segments),
     halfHeight: ({ height }) => height / 2,
+    probeRadius: ({ radius, height }) => Math.max(radius, height / 2),
     flatShading: false,
   },
   prism: {
@@ -46,6 +50,7 @@ export const COLLIDERS = Object.freeze({
     geometry: ({ radius, height }) => new THREE.CylinderGeometry(radius, radius, height, 3),
     shape: ({ radius, height }) => new CANNON.Cylinder(radius, radius, height, 3),
     halfHeight: ({ height }) => height / 2,
+    probeRadius: ({ radius, height }) => Math.max(radius * 0.8, height / 2),
     flatShading: true,
   },
 });

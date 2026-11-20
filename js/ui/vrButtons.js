@@ -59,6 +59,12 @@ export function createVrButtons({ parent, definitions, onPress, now = () => perf
 
     setHovered(ids) { hovered = ids; },
 
+    /** Muestra u oculta un botón. Un botón oculto no recibe el rayo (selectables lo ignora). */
+    setVisible(id, visible) {
+      const entry = byId.get(id);
+      if (entry) entry.mesh.visible = visible;
+    },
+
     update(t) {
       for (const entry of entries) {
         const pressed = t < entry.pressedUntil;

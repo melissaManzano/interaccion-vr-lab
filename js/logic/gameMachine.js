@@ -1,13 +1,12 @@
 /**
  * gameMachine.js — Máquina de estados del reto de clasificación.
  *
- * Fases:   pendiente ──(primer agarre)──▶ activo ──(20/20)──▶ completado
- *              ▲                                                │
- *              └──────────── Reinicio aleatorio ◀───────────────┘
+ * Fases:   pendiente ──(botón Iniciar)──▶ activo ──(20/20)──▶ completado
+ *              ▲                                                 │
+ *              └──────────── Reinicio aleatorio ◀────────────────┘
  *
- * Figura:  libre ─(pinza)─▶ en mano ─(abrir dedos)─▶ libre (cae con gravedad)
- *            ▲                                          │ reposa dentro de un recipiente
- *            └── recipiente equivocado: error + expulsión ◀── validar ──▶ clasificada (bloqueada)
+ * Los estados de cada figura (disponible, sujeta, en caída, en validación,
+ * clasificada, recuperable) están descritos en core/state.js.
  *
  * La validación NO ocurre al soltar: ocurre cuando la física deja la figura en
  * reposo dentro de un recipiente (ver sortingMonitor.js). Así un rebote que la saca
@@ -49,17 +48,30 @@ export function createGameMachine({ store, classes, bins, perClass, rules, hooks
     return cls ? `${cls.label} · ${cls.plural}` : binId;
   };
 
+  const GRABBABLE = new Set([
+    OBJECT_STATUS.AVAILABLE, OBJECT_STATUS.FALLING, OBJECT_STATUS.VALIDATING, OBJECT_STATUS.RECOVERABLE,
+  ]);
+
+  /** Solo se juega en fase ACTIVA: antes hay que pulsar "Iniciar". */
   function canGrab(objectId) {
     const obj = store.getObject(objectId);
-    return store.getState().phase !== PHASE.COMPLETED
-      && obj.status === OBJECT_STATUS.FREE
+    return store.getState().phase === PHASE.ACTIVE
+      && GRABBABLE.has(obj.status)
       && obj.heldBy === null;
+  }
+
+  /** Inicio explícito (botón 3D "Iniciar"): arranca el cronómetro. */
+  function start() {
+    if (store.getState().phase !== PHASE.PENDING) return false;
+    store.setPhase(PHASE.ACTIVE);
+    store.startTimer(now());
+    notify('¡Comienza! Toma una figura de cualquier mesa y llévala a su recipiente.', MESSAGE_KIND.INFO);
+    callHook('onStart');
+    return true;
   }
 
   function grab(objectId, sourceId) {
     if (!canGrab(objectId)) return false;
-    if (store.getState().phase === PHASE.PENDING) store.setPhase(PHASE.ACTIVE);
-    store.startTimer(now());
     store.setObjectStatus(objectId, OBJECT_STATUS.HELD, sourceId);
     const cls = store.getObject(objectId).classId;
     const target = binByClass.get(cls);
@@ -68,11 +80,11 @@ export function createGameMachine({ store, classes, bins, perClass, rules, hooks
     return true;
   }
 
-  /** Al abrir los dedos: la figura queda libre y la física decide dónde termina. */
+  /** Al abrir los dedos: la figura cae y la física decide dónde termina. */
   function release(objectId) {
     const obj = store.getObject(objectId);
     if (obj.status !== OBJECT_STATUS.HELD) return false;
-    store.setObjectStatus(objectId, OBJECT_STATUS.FREE);
+    store.setObjectStatus(objectId, OBJECT_STATUS.FALLING);
     callHook('onRelease', objectId);
     return true;
   }
@@ -81,7 +93,7 @@ export function createGameMachine({ store, classes, bins, perClass, rules, hooks
   function cancel(objectId, reason) {
     if (!release(objectId)) return;
     if (reason === 'tracking-lost') {
-      notify('Se perdió el seguimiento de la mano: la figura cayó por gravedad.', MESSAGE_KIND.WARNING);
+      notify('Se perdió el seguimiento de la mano: la figura se soltó y cayó por gravedad.', MESSAGE_KIND.WARNING);
     }
   }
 
@@ -102,14 +114,17 @@ export function createGameMachine({ store, classes, bins, perClass, rules, hooks
    */
   function deposit(objectId, binId) {
     const obj = store.getObject(objectId);
-    if (obj.status !== OBJECT_STATUS.FREE) return null;
+    if (obj.status === OBJECT_STATUS.HELD || obj.status === OBJECT_STATUS.SORTED) return null;
     const bin = binById.get(binId);
     if (!bin) throw new Error(`Recipiente desconocido: ${binId}`);
 
     // Mismo intento ya evaluado en este recipiente: no se vuelve a contar.
     // (Si una figura equivocada recae en el mismo bote, solo se vuelve a expulsar.)
     if (obj.lastBinId === binId) {
-      if (evaluateDeposit(obj.classId, bin) === DEPOSIT_RESULT.WRONG) callHook('onEject', objectId, binId);
+      if (evaluateDeposit(obj.classId, bin) === DEPOSIT_RESULT.WRONG) {
+        store.setObjectStatus(objectId, OBJECT_STATUS.FALLING);
+        callHook('onEject', objectId, binId);
+      }
       return null;
     }
     if (store.getState().phase === PHASE.COMPLETED) return null;
@@ -131,6 +146,7 @@ export function createGameMachine({ store, classes, bins, perClass, rules, hooks
       }
     } else {
       store.recordError(objectId, binId);
+      store.setObjectStatus(objectId, OBJECT_STATUS.FALLING); // la expulsión la pone en movimiento
       callHook('onWrong', objectId, binId);
       callHook('onEject', objectId, binId);
       const target = binByClass.get(obj.classId);
@@ -143,7 +159,7 @@ export function createGameMachine({ store, classes, bins, perClass, rules, hooks
   function reset() {
     store.resetProgress();
     callHook('onReset');
-    notify('Reinicio aleatorio: las figuras cambiaron de mesa. Pellizca una para comenzar.', MESSAGE_KIND.INFO);
+    notify('Reinicio aleatorio: nueva distribución. Pulsa "Iniciar" para comenzar.', MESSAGE_KIND.INFO);
   }
 
   function onSessionStart() {
@@ -155,6 +171,6 @@ export function createGameMachine({ store, classes, bins, perClass, rules, hooks
   }
 
   return Object.freeze({
-    canGrab, grab, release, cancel, deposit, reset, notify, onSessionStart, onSessionEnd,
+    canGrab, start, grab, release, cancel, deposit, reset, notify, onSessionStart, onSessionEnd,
   });
 }

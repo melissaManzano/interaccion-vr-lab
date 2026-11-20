@@ -25,10 +25,19 @@ const MESSAGE_STYLE = {
   [MESSAGE_KIND.ERROR]: { bg: '#7f1d1d', fg: '#fecaca' },
 };
 const DEFAULT_HINT = {
-  pending: 'Apunta a una figura de cualquier mesa y pellizca para comenzar.',
+  pending: 'Apunta al botón "Iniciar" (abajo) y pellizca para comenzar.',
   active: 'Deja cada figura en el recipiente con su misma forma, letra y color.',
   completed: '¡Excelente trabajo! Pulsa "Reinicio aleatorio" para otra ronda.',
 };
+
+/** "2 en caída · 1 en validación · 1 recuperable" (solo los estados transitorios presentes). */
+function describeStates(counts) {
+  const parts = [];
+  if (counts.falling) parts.push(`${counts.falling} en caída`);
+  if (counts.validating) parts.push(`${counts.validating} en validación`);
+  if (counts.recoverable) parts.push(`${counts.recoverable} ${counts.recoverable === 1 ? 'recuperable' : 'recuperables'} (ámbar)`);
+  return parts.join(' · ');
+}
 
 export function createScoreboard({ parent, store, classes, bins, title, position, width }) {
   const classById = new Map(classes.map((c) => [c.id, c]));
@@ -94,6 +103,7 @@ export function createScoreboard({ parent, store, classes, bins, title, position
       messageKind: hasMessage ? msg.kind : MESSAGE_KIND.INFO,
       handsText,
       handsColor,
+      statesText: describeStates(store.countByStatus()),
     };
   }
 
@@ -159,8 +169,12 @@ export function createScoreboard({ parent, store, classes, bins, title, position
     lines.forEach((line, i) => ctx.fillText(line, 70, startY + i * 40));
 
     ctx.fillStyle = view.handsColor;
-    ctx.font = `500 26px ${FONT_STACK}`;
-    ctx.fillText(view.handsText, 48, 672, CANVAS_W - 96);
+    ctx.font = `500 24px ${FONT_STACK}`;
+    ctx.fillText(view.handsText, 48, 668, 560);
+    ctx.fillStyle = '#fbbf24';
+    ctx.textAlign = 'right';
+    ctx.fillText(view.statesText, CANVAS_W - 48, 668, 360);
+    ctx.textAlign = 'left';
   }
 
   function drawStat(x, y, w, label, value, color, valueSize = 62) {

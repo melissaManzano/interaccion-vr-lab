@@ -14,6 +14,12 @@
  */
 import * as CANNON from 'cannon-es';
 
+/**
+ * Grupos de colisión. Todo choca con todo; los grupos solo sirven para que el
+ * barrido del agarre cinemático (holdController) consulte ÚNICAMENTE los estáticos.
+ */
+export const GROUP = Object.freeze({ OBJECT: 1, STATIC: 2 });
+
 export function createPhysicsWorld(config) {
   const p = config.physics;
   const world = new CANNON.World({ gravity: new CANNON.Vec3(0, p.gravity, 0) });
@@ -45,7 +51,12 @@ export function createPhysicsWorld(config) {
 
   // --- Colisionadores estáticos -------------------------------------------------
   const staticBodies = [];
-  const addStatic = (body) => { world.addBody(body); staticBodies.push(body); return body; };
+  const addStatic = (body) => {
+    body.collisionFilterGroup = GROUP.STATIC;
+    world.addBody(body);
+    staticBodies.push(body);
+    return body;
+  };
   const box = (hx, hy, hz) => new CANNON.Box(new CANNON.Vec3(hx, hy, hz));
 
   // Suelo: plano infinito (la normal de Plane es +Z; se gira para que apunte a +Y).
@@ -94,16 +105,17 @@ export function createPhysicsWorld(config) {
   }
 
   // --- Cuerpos dinámicos ----------------------------------------------------------
-  function createDynamicBody({ shape, mass, angularDamping = p.angularDamping }) {
+  function createDynamicBody({ shape, mass, linearDamping = p.linearDamping, angularDamping = p.angularDamping }) {
     const body = new CANNON.Body({
       mass,
       material: materials.object,
       shape,
-      linearDamping: p.linearDamping,
+      linearDamping,
       angularDamping,
       allowSleep: true,
       sleepSpeedLimit: p.sleepSpeedLimit,
       sleepTimeLimit: p.sleepTimeLimit,
+      collisionFilterGroup: GROUP.OBJECT,
     });
     world.addBody(body);
     return body;
@@ -125,6 +137,7 @@ export function createPhysicsWorld(config) {
     body.wakeUp();
   }
 
+  const rayResult = new CANNON.RaycastResult();
   const stepListeners = new Set();
   // 'postStep' se emite al final de cada subpaso: el control de agarre se reaplica
   // antes del siguiente subpaso para que el solver de contactos lo respete.
@@ -135,6 +148,16 @@ export function createPhysicsWorld(config) {
     materials,
     createDynamicBody,
     teleport,
+
+    /**
+     * Rayo contra los colisionadores ESTÁTICOS (mesas, mostrador, recipientes, suelo).
+     * Devuelve { distance, normal } o null.
+     */
+    raycastStatic(from, to) {
+      rayResult.reset();
+      world.raycastClosest(from, to, { collisionFilterMask: GROUP.STATIC, skipBackfaces: true }, rayResult);
+      return rayResult.hasHit ? { distance: rayResult.distance, normal: rayResult.hitNormalWorld } : null;
+    },
 
     /** Activa o quita el material sin fricción de expulsión. */
     setEjecting(body, on) {

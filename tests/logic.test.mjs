@@ -44,7 +44,19 @@ function setup() {
     game.release(objectId);
     return game.deposit(objectId, binId);
   };
+  game.start(); // la mayoría de las pruebas parten de una ronda iniciada
   return { store, game, calls, drop, tick: (ms) => { clock += ms; } };
+}
+
+/** Igual que setup(), pero sin pulsar "Iniciar". */
+function setupPending() {
+  let clock = 0;
+  const store = createStore({ objects: OBJECTS, bins: CONFIG.bins, capacity: CONFIG.perClass });
+  const game = createGameMachine({
+    store, classes: CONFIG.classes, bins: CONFIG.bins, perClass: CONFIG.perClass,
+    rules: CONFIG.rules, now: () => clock,
+  });
+  return { store, game, tick: (ms) => { clock += ms; } };
 }
 
 describe('Configuración de la práctica', () => {
@@ -165,12 +177,21 @@ describe('Estado único, aciertos y errores (store + gameMachine)', () => {
     assert.equal(store.getObject('cube-1').heldBy, 'left');
   });
 
-  test('soltar NO valida: la figura queda libre hasta reposar en un recipiente', () => {
+  test('soltar NO valida: la figura pasa a "en caída" hasta reposar en un recipiente', () => {
     const { game, store } = setup();
     game.grab('cube-1', 'left');
+    assert.equal(store.getObject('cube-1').status, OBJECT_STATUS.HELD);
     game.release('cube-1');
-    assert.equal(store.getObject('cube-1').status, OBJECT_STATUS.FREE);
+    assert.equal(store.getObject('cube-1').status, OBJECT_STATUS.FALLING);
     assert.equal(store.sortedCount(), 0);
+  });
+
+  test('se puede volver a tomar una figura en caída, en validación o recuperable', () => {
+    const { game, store } = setup();
+    for (const status of [OBJECT_STATUS.FALLING, OBJECT_STATUS.VALIDATING, OBJECT_STATUS.RECOVERABLE]) {
+      store.setObjectStatus('cube-1', status);
+      assert.equal(game.canGrab('cube-1'), true, status);
+    }
   });
 
   test('acierto: suma 1, avanza su recipiente y la figura queda bloqueada', () => {
@@ -196,7 +217,7 @@ describe('Estado único, aciertos y errores (store + gameMachine)', () => {
     assert.equal(drop('cube-1', 'R2'), DEPOSIT_RESULT.WRONG);
     assert.equal(store.getState().stats.errors, 1);
     assert.equal(store.getBin('R2').count, 0);
-    assert.equal(store.getObject('cube-1').status, OBJECT_STATUS.FREE);
+    assert.equal(store.getObject('cube-1').status, OBJECT_STATUS.FALLING, 'la expulsión la pone en caída');
     assert.ok(calls.some(([n]) => n === 'onEject'));
   });
 
@@ -225,17 +246,16 @@ describe('Estado único, aciertos y errores (store + gameMachine)', () => {
     assert.equal(store.accuracy(), 3 / 4);
   });
 
-  test('pérdida de tracking: la figura queda libre (cae por gravedad) y no cuenta', () => {
+  test('pérdida de tracking: la figura se suelta (en caída) y no cuenta', () => {
     const { game, store } = setup();
     game.grab('cube-1', 'left');
     game.cancel('cube-1', 'tracking-lost');
-    assert.equal(store.getObject('cube-1').status, OBJECT_STATUS.FREE);
+    assert.equal(store.getObject('cube-1').status, OBJECT_STATUS.FALLING);
     assert.equal(store.sortedCount(), 0);
   });
 
   test('tiempo de llenado: se registra al llegar a 5/5 con el tiempo global de ese momento', () => {
     const { store, drop, tick, calls } = setup();
-    drop('sphere-1', 'R2'); // inicia el cronómetro
     for (let i = 1; i <= 5; i += 1) {
       tick(1000);
       drop(`cube-${i}`, 'R1');
@@ -246,9 +266,21 @@ describe('Estado único, aciertos y errores (store + gameMachine)', () => {
     assert.ok(calls.some(([n, id]) => n === 'onBinFilled' && id === 'R1'));
   });
 
-  test('flujo completo: pendiente → activo → completado (20/20), cronómetro detenido', () => {
-    const { game, store, drop, tick } = setup();
+  test('inicio explícito: antes de "Iniciar" no se puede tomar nada ni corre el tiempo', () => {
+    const { game, store, tick } = setupPending();
     assert.equal(store.getState().phase, PHASE.PENDING);
+    assert.equal(game.grab('cube-1', 'left'), false);
+    tick(5000);
+    assert.equal(store.elapsedMs(5000), 0);
+    assert.equal(game.start(), true);
+    assert.equal(game.start(), false, 'no se inicia dos veces');
+    assert.equal(store.getState().phase, PHASE.ACTIVE);
+    assert.equal(game.grab('cube-1', 'left'), true);
+  });
+
+  test('flujo completo: activo → completado (20/20), cronómetro detenido', () => {
+    const { game, store, drop, tick } = setup();
+    assert.equal(store.getState().phase, PHASE.ACTIVE);
     for (const o of OBJECTS) {
       tick(500);
       const bin = CONFIG.bins.find((b) => b.classId === o.classId);
@@ -277,6 +309,7 @@ describe('Estado único, aciertos y errores (store + gameMachine)', () => {
     assert.equal(store.getBin('R1').count, 0);
     assert.equal(store.getState().phase, PHASE.PENDING);
     assert.equal(store.elapsedMs(10_000), 0);
+    assert.equal(store.countByStatus().available, 20);
     assert.ok(calls.some(([n]) => n === 'onReset'), 'el reinicio pide redistribuir al azar');
   });
 

@@ -105,6 +105,14 @@ export function createDesktopPreview({ camera, domElement, position, target }) {
       }
     },
 
+    /** Coloca la cámara de depuración (útil para capturas desde la consola). */
+    setView(position, target) {
+      camera.position.fromArray(position);
+      controls.target.fromArray(target);
+      camera.lookAt(controls.target);
+      controls.update();
+    },
+
     /** Restaura la cámara de escritorio tras salir de VR. */
     restoreCamera() {
       camera.position.copy(homePosition);

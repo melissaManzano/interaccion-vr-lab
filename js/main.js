@@ -15,7 +15,7 @@
  */
 import * as THREE from 'three';
 import { CONFIG } from './config.js';
-import { createStore, PHASE_LABEL, MESSAGE_KIND } from './core/state.js';
+import { createStore, PHASE, PHASE_LABEL, MESSAGE_KIND } from './core/state.js';
 import { createSceneContext } from './scene/sceneSetup.js';
 import { buildLab } from './scene/labBuilder.js';
 import { createPhysicsWorld } from './physics/physicsWorld.js';
@@ -69,7 +69,7 @@ async function main() {
     perClass: CONFIG.perClass,
     tableTopY: CONFIG.table.topY,
     dropHeight: CONFIG.spawn.dropHeight,
-    sphereAngularDamping: CONFIG.physics.sphereAngularDamping,
+    sphereDamping: { linearDamping: CONFIG.physics.sphereLinearDamping, angularDamping: CONFIG.physics.sphereAngularDamping },
     onImpact: (speed) => sound.impact(speed),
   });
 
@@ -132,7 +132,9 @@ async function main() {
     now,
     onPress: (id) => {
       sound.click();
-      if (id === 'reset') {
+      if (id === 'start') {
+        game.start();
+      } else if (id === 'reset') {
         interaction.abortAll(); // suelta cualquier figura en mano antes de redistribuir
         game.reset();
       } else if (id === 'exit') {
@@ -244,7 +246,7 @@ async function main() {
     else preview.applyFeedback(feedback);
 
     // 2) Física
-    hold.apply();
+    hold.apply(CONFIG.physics.fixedStep);
     physics.step(dt);
     objects.sync();
 
@@ -255,6 +257,7 @@ async function main() {
     objects.updateVisuals(t, getStatus);
     lab.updateVisuals(t, getBinState);
     binDisplays.update();
+    buttons.setVisible('start', store.getState().phase === PHASE.PENDING);
     buttons.update(t);
     scoreboard.update(t);
 
@@ -299,7 +302,7 @@ async function main() {
   }, { once: true });
 
   // Acceso de depuración desde la consola (no expone secretos).
-  window.lab = Object.freeze({ store, game, config: CONFIG, physics, objects, camera });
+  window.lab = Object.freeze({ store, game, config: CONFIG, physics, objects, camera, setView: preview.setView });
 }
 
 async function reportSupport(ui) {

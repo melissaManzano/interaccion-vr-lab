@@ -110,34 +110,65 @@ Clases elegidas: **cubo, esfera, cilindro y prisma triangular**, con 5 figuras d
 | figura–recipiente | 0.45 | 0.15 |
 | figura–suelo | 0.60 | 0.35 |
 
-La esfera tiene más amortiguamiento angular (0.35) para que no ruede indefinidamente.
+**Resistencia a la rodadura.** cannon-es no la modela. Al medirlo, una esfera lanzada a 1 m/s por el suelo seguía rodando a los 12 s y recorría más de 2.6 m. Las esferas tienen amortiguamiento lineal 0.4 y angular 0.6: ahora se detienen en ~0.6 m y pasan a *recuperable* en unos 3 s.
 
-## 5. Sostener una figura sin romper la física
+## 5. Sostener una figura: dinámico → cinemático → dinámico
 
-Hay tres formas de mover un objeto físico con la mano:
+[holdController.js](../js/physics/holdController.js) implementa el ciclo que pide la práctica (6.2 y 6.3).
 
-| Opción | Problema |
-|---|---|
-| Copiar la posición de la mano al cuerpo | Atraviesa mesas y paredes; al soltar no tiene velocidad (no se puede lanzar) |
-| Convertirlo en cuerpo cinemático | Empuja a los demás, pero nada lo detiene: atraviesa los estáticos |
-| **Controlarlo por velocidad** (elegida) | Ninguno relevante |
+| Momento | Tipo de cuerpo | Qué ocurre |
+|---|---|---|
+| En reposo o cayendo | `DYNAMIC` | Gravedad, fricción, rebote y colisiones con todo |
+| Cierre de la pinza | → `KINEMATIC` | Deja de sentir gravedad y empujes (masa efectiva infinita), sigue a la mano **por velocidad** y empuja a las figuras dinámicas que toca |
+| Apertura de la pinza | → `DYNAMIC` | Recupera su masa y recibe una **velocidad de liberación estable**; desde ahí manda la física |
 
-[holdController.js](../js/physics/holdController.js) mantiene la figura como cuerpo **dinámico** y, antes de **cada subpaso** (evento `postStep` de cannon-es), le asigna:
+**Seguir a la mano sin teletransportar.** Antes de cada subpaso se asigna:
 
 ```
 v = (objetivo − posición) × 18   (máximo 5 m/s)
 ```
 
-El solver de contactos corre después, así que la figura choca de verdad contra mesas, paredes y otras figuras, y las empuja. Al soltar conserva la velocidad de la mano (máximo 3.5 m/s).
+**Barrido contra estáticos.** Un cuerpo cinemático no es detenido por los estáticos: sin protección atravesaría mesas y paredes. Por eso, antes de cada subpaso se lanza un rayo (`world.raycastClosest`, solo contra el grupo de colisión `STATIC`) en la dirección del movimiento, con una longitud igual al avance del subpaso más el radio de la figura. Si tocaría una superficie, se elimina la componente de la velocidad que entra en ella y la figura **se desliza** sobre la mesa o a lo largo de la pared. Se hacen dos pasadas para los rincones.
+
+**Velocidad de liberación estable.** Es el promedio de los últimos 6 subpasos (≈ 66 ms), limitado a 3.5 m/s. El promedio filtra el temblor del seguimiento de manos; el límite evita lanzamientos que atraviesen paredes (cannon-es no tiene CCD).
 
 **De dónde sale el objetivo** ([dragController.js](../js/interaction/dragController.js)):
 
 - **Agarre cercano:** si la pinza se cierra a menos de 7 cm del centro de una figura, se toma directamente "con la mano" y queda pegada a los dedos.
-- **Agarre a distancia (rayo):** la distancia del rayo queda fija al agarrar, y **estirar o recoger el brazo** la cambia ×2.5 (técnica de "carrete"). Así una figura de una mesa lateral se trae hasta los recipientes sin caminar. En la vista previa de escritorio, la rueda del mouse cumple el mismo papel.
+- **Agarre a distancia (rayo):** la distancia del rayo queda fija al agarrar, y **estirar o recoger el brazo** la cambia ×2.5 (técnica de "carrete"). En la vista previa de escritorio, la rueda del mouse cumple el mismo papel.
 
-## 6. Validación: aciertos, errores y tiempos
+> **Historia del diseño.** La primera versión mantenía la figura dinámica y la movía por velocidad. Chocaba bien, pero no cumplía el requisito 6.2 (paso a control cinemático). El barrido conserva la ventaja de aquella versión (no atravesar estáticos) con el cuerpo cinemático que pide la práctica.
 
-**Soltar no valida.** La figura cae por gravedad y [sortingMonitor.js](../js/validation/sortingMonitor.js) la observa cada cuadro. Se considera depositada cuando se cumplen dos condiciones:
+**Limitación del barrido:** usa un solo rayo desde el centro. Si el borde de una figura roza una esquina que el rayo central no toca, puede entrar unos milímetros; al soltarla, el solver la separa suavemente.
+
+**Recuperación segura (6.4):**
+
+| Situación | Respuesta |
+|---|---|
+| Pérdida de seguimiento > 10 cuadros | Se suelta la figura (→ dinámica, en caída) y se avisa en el marcador |
+| La sesión VR termina (botón o menú del sistema) | Se sueltan todas las figuras sujetas y se pausa el cronómetro; el progreso se conserva |
+| Figura en reposo en el suelo | Estado *recuperable*: brillo ámbar pulsante; se recoge con el rayo |
+| Figura fuera de la sala (y < −0.5 m o a más de 3.2 m) | Vuelve a su lugar en la mesa y cae desde 1 cm |
+| Reinicio con una figura en la mano | Se suelta sin validar y se redistribuye todo |
+
+## 6. Estados, validación y métricas
+
+**Estados de cada figura** ([state.js](../js/core/state.js)):
+
+| Estado | Cuándo | ¿Se puede tomar? |
+|---|---|---|
+| Disponible | En reposo sobre una mesa o el mostrador | Sí |
+| Sujeta | En una mano (cuerpo cinemático) | No (ya está en una mano) |
+| En caída | Suelta y moviéndose, o expulsada | Sí |
+| En validación | Dentro del volumen útil de un recipiente, esperando estabilizarse | Sí (se cancela la validación) |
+| Clasificada | Aceptada por su recipiente | No (bloqueada) |
+| Recuperable | En reposo en el suelo (y < 0.3 m) | Sí, con el rayo |
+
+Los estados físicos (en caída, en validación, disponible, recuperable) los asigna [sortingMonitor.js](../js/validation/sortingMonitor.js) observando la simulación. Sujeta y clasificada las asigna la máquina de juego. El marcador muestra cuántas figuras hay en los estados transitorios ("2 en caída · 1 recuperable").
+
+**Fases del reto:** *Pendiente* (botón 3D **Iniciar** visible, no se puede tomar nada y el cronómetro está en 0) → *Activo* → *Completado* (20/20). **Reinicio aleatorio** vuelve a *Pendiente* con una distribución nueva.
+
+**Soltar no valida.** La figura se considera depositada cuando se cumplen dos condiciones:
 
 1. su centro está dentro del volumen interior de un recipiente (con 10 cm de margen sobre el borde, por si queda en una pila), y
 2. lleva **350 ms** casi quieta (velocidad < 0.12 m/s) o el motor ya la durmió.
@@ -148,7 +179,7 @@ Así, un rebote que la saca del recipiente no cuenta, y una figura lanzada que c
 |---|---|
 | ✅ Recipiente correcto | +1 total y +1 en el recipiente, destello verde en figura y borde, sonido, figura bloqueada |
 | ❌ Recipiente equivocado | +1 error, destello rojo, sonido grave, mensaje con el recipiente correcto y **expulsión física** |
-| 🏁 Recipiente lleno (5/5) | Se guarda su **tiempo de llenado** (cronómetro global en ese momento), borde verde y sonido |
+| 🏁 Recipiente lleno (5/5) | Se guarda su **tiempo de llenado** (tiempo transcurrido desde *Iniciar*), borde verde y sonido |
 | 🏆 20/20 | Fase *Completado*, se detiene el cronómetro y se muestra el resumen |
 
 **Expulsión.** Es un impulso real (Δv de 2.4 m/s hacia arriba y 0.8 m/s hacia el usuario), no una animación. Durante 0.6 s la figura usa un material **sin fricción**. Sin él, en las pruebas la figura quedaba encajada entre otra figura y la pared, y la fricción lateral frenaba su subida: 5 de 5 expulsiones fallaban. Con él, 6 de 6 salieron.
@@ -186,7 +217,7 @@ El generador aleatorio se inyecta: la app usa `Math.random` y las pruebas usan u
 
 ## 10. Verificación realizada
 
-**Pruebas de lógica.** `node --test tests/logic.test.mjs`: **31 pruebas, 31 pasan** (Node 24). Cubren:
+**Pruebas de lógica.** `node --test tests/logic.test.mjs`: **33 pruebas, 33 pasan** (Node 24). Cubren:
 
 - configuración 4 × 5;
 - volumen de los recipientes;
@@ -196,22 +227,30 @@ El generador aleatorio se inyecta: la app usa `Math.random` y las pruebas usan u
 - precisión;
 - tiempo de llenado;
 - flujo 0/20 → 20/20;
+- inicio explícito;
+- estados en caída, en validación y recuperable;
 - reinicio;
 - pausa al salir de VR;
 - distribución reproducible y sin encimarse (25 semillas);
 - pinza.
 
-**Prueba en navegador real.** Chrome headless controlado por el protocolo DevTools, con la app servida en local:
+**Prueba en navegador real.** Chrome headless controlado por el protocolo DevTools, con la app servida en local. Las capturas están en [capturas/](capturas/).
 
 | Comprobación | Resultado observado |
 |---|---|
-| Carga de módulos e import map | Sin errores de consola ni de red; *Three.js* y *cannon-es* en verde |
-| Gravedad | Las 20 figuras caen y se asientan sobre las mesas (desviación 0.0 mm) y se duermen; 5 por mesa |
-| Agarre real con el mouse | Rayo → *en mano* → la figura viaja por velocidad de la mesa 4 al recipiente A → se suelta, cae y cuenta como acierto (1/20, cronómetro en marcha) |
-| Colisión con el borde | Una figura soltada 3 mm sobre la pared frontal se volcó hacia afuera y cayó al suelo (física correcta, no cuenta) |
-| Error y expulsión | Esfera y 5 cilindros en el recipiente de cubos: 6 errores contados una vez cada uno; las 6 figuras salieron del recipiente |
-| Llenado | 5 cubos en R1 → 5/5 con tiempo de llenado registrado y borde verde |
-| Reinicio aleatorio | 0/20, 0 errores, recipientes en 0, fase *Pendiente*, cronómetro en 0, distribución distinta, las 20 sobre las mesas |
+| Carga de módulos e import map | Sin errores ni advertencias de consola o red; *Three.js* y *cannon-es* en verde |
+| Gravedad y distribución | Las 20 figuras caen 1 cm y se asientan sobre las mesas (5 por mesa, todas *disponibles*) |
+| Inicio | Antes de *Iniciar*: fase *Pendiente*, nada se puede tomar. Botón 3D pulsado con el mouse → *Activo* |
+| Agarre cinemático | Al agarrar, `body.type = 4` (`KINEMATIC`), estado *sujeta* |
+| No atraviesa la mesa | Empujada hacia abajo contra su mesa, su centro quedó en 0.780 m = tablero + media altura |
+| Liberación | Al soltar, `body.type = 1` (`DYNAMIC`), estado *en caída* → *en validación* → *clasificada* |
+| Error y expulsión | La esfera en el recipiente de cubos: +1 error, destello rojo, sale, rueda y queda *recuperable* en el suelo |
+| Colisiones | Cuatro cilindros soltados desde 25–61 cm sobre una mesa con figuras chocan, rebotan y se asientan sin atravesarse |
+| 20/20 | Fase *Completado*, cronómetro detenido, tiempo de llenado de cada recipiente registrado, precisión 95 % (1 error) |
+| Reinicio aleatorio | *Pendiente*, 0/20, las 20 *disponibles* en posiciones nuevas |
+| Rodadura | Esfera lanzada a 1 m/s: se detiene a ~0.6 m (antes del ajuste, > 2.6 m) |
+
+Algunas capturas se escenificaron desde la consola (colocar figuras sobre un recipiente y dejarlas caer) para mostrar cada caso. La caída, el choque, la validación y el marcador son siempre los reales.
 
 **Pendiente de verificar en el Quest 3** (requiere el visor): sensación del agarre cercano y del "carrete", estabilidad con las manos reales, FPS (*OVR Metrics Tool*) y que la expulsión no moleste al usuario. Ver la matriz del README.
 
